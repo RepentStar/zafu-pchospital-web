@@ -50,15 +50,15 @@ pnpm install
 pnpm dev
 ```
 
-打开 http://localhost:3000 即可开始开发。
+打开 `http://localhost:3000` 即可开始开发。
 
-> 如果本机还没有 pnpm：
+> 如果本机尚未启用 Corepack：
 >
 > ```bash
-> corepack enable && corepack prepare pnpm@latest --activate
-> # 或
-> npm install -g pnpm
+> corepack enable
 > ```
+>
+> 随后直接在项目目录运行 `pnpm install`。corepack 会使用项目固定的 pnpm 版本
 
 ### 常用命令
 
