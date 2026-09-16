@@ -1,4 +1,4 @@
-# Phase 2 M0–M1 数据契约
+# Phase 2 M0–M2 数据契约
 
 ## 数据库基线
 
@@ -63,3 +63,15 @@ Repository / Service 的默认读取必须加 `deletedAt: null`。身份采用�
 
 公共枚举与 TypeScript 类型的唯一事实来源是 `src/types/contracts.ts`。数据库使用受控
 字符串列，禁止 Feature 自行拼写新状态。
+
+## M2 维修记录契约
+
+- `repair_records.member_profile_id` 是唯一业务归属，不保存 QQ、手机号或姓名外键。
+- 状态只允许 `DRAFT → PENDING → APPROVED|REJECTED` 和 `REJECTED → PENDING`。
+- `version` 在记录修改、提交、审核、标记和软删除时递增；成员保存必须提交当前版本。
+- 草稿允许不完整；提交时要求业务日期、1–10080 分钟、启用分类、10–10000 字正文、固定结果和至少一张有效照片。
+- `repair_reviews` 和 `repair_timeline_events` 只追加；退回审核意见必填。
+- 照片数据库只保存元数据与服务端 `storage_key`，文件不在 `public/` 下；照片访问继承维修记录可见性。
+- 分类使用稳定 `code` 幂等 Seed。停用分类不能用于新提交，但历史引用保留。
+- 默认业务查询排除 `repair_records.deleted_at IS NOT NULL` 和已软删除照片。
+- 后续所有正式统计必须统一使用 `status = APPROVED AND deleted_at IS NULL`，入口为 `listApprovedRepairsForAnalytics()`。

@@ -29,6 +29,24 @@ async function main(): Promise<void> {
         createdAt: now,
       },
     });
+    const categories = [
+      ["10000000-0000-4000-8000-000000000001", "COOLING_CLEANING", "散热 / 清灰"],
+      ["10000000-0000-4000-8000-000000000002", "HARDWARE", "硬件故障"],
+      ["10000000-0000-4000-8000-000000000003", "SYSTEM", "系统问题"],
+      ["10000000-0000-4000-8000-000000000004", "SOFTWARE", "软件问题"],
+      ["10000000-0000-4000-8000-000000000005", "DRIVER", "驱动问题"],
+      ["10000000-0000-4000-8000-000000000006", "NETWORK", "网络问题"],
+      ["10000000-0000-4000-8000-000000000007", "STORAGE", "磁盘 / 存储"],
+      ["10000000-0000-4000-8000-000000000008", "PERIPHERAL", "外设问题"],
+      ["10000000-0000-4000-8000-000000000009", "OTHER", "其他"],
+    ] as const;
+    for (const [index, [id, code, name]] of categories.entries()) {
+      await prisma.repairCategory.upsert({
+        where: { code },
+        update: { name, sortOrder: index + 1 },
+        create: { id, code, name, sortOrder: index + 1, createdAt: now },
+      });
+    }
     await prisma.role.upsert({
       where: { code: "ADMIN" },
       update: { name: "管理员" },

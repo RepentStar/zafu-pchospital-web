@@ -1,0 +1,14 @@
+import type { Metadata } from "next";
+import { RepairList } from "@/components/repairs/RepairList";
+import { Section } from "@/components/ui/Section";
+import { repairResultLabels, repairStatusLabels } from "@/config/repairs";
+import { requireMemberPage } from "@/lib/auth/member-page";
+export const metadata: Metadata = { title: "维修记录" };
+export default async function RepairsPage() {
+  await requireMemberPage();
+  return (
+    <Section variant="page-head" className="repair-workspace" labelledBy="repairs-title">
+      <RepairList statusLabels={repairStatusLabels} resultLabels={repairResultLabels} />
+    </Section>
+  );
+}
