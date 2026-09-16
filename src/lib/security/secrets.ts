@@ -19,6 +19,25 @@ export function digestInviteCode(code: string): Uint8Array<ArrayBuffer> {
   );
 }
 
+export function generateSessionToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function digestSessionToken(token: string): Uint8Array<ArrayBuffer> {
+  return digestSecret(token, getServerEnv().AUTH_SECRET);
+}
+
+export function digestLoginThrottleKey(qq: string, ipAddress: string): Uint8Array<ArrayBuffer> {
+  return digestSecret(`${qq}:${ipAddress}`, getServerEnv().PII_AUDIT_PEPPER);
+}
+
+function digestSecret(value: string, secret: string): Uint8Array<ArrayBuffer> {
+  const digest = createHmac("sha256", secret).update(value).digest();
+  return new Uint8Array(
+    digest.buffer.slice(digest.byteOffset, digest.byteOffset + digest.byteLength),
+  );
+}
+
 export async function hashPassword(password: string): Promise<string> {
   if (password.length < 12 || password.length > 128) {
     throw new Error("密码长度必须为 12–128 个字符");

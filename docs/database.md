@@ -46,7 +46,7 @@ docker compose -f compose.greatsql.yml logs greatsql
 数据库、凭据、`AUTH_SECRET` 和 pepper。浏览器端不得暴露这些变量。
 
 - `DATABASE_URL`：Prisma CLI 与服务端连接串。
-- `AUTH_SECRET`：会话/鉴权预留密钥，至少 32 个随机字节。
+- `AUTH_SECRET`：Session 令牌 HMAC 密钥，至少 32 个随机字节；轮换会使现有登录失效。
 - `INVITE_CODE_PEPPER`：邀请码 HMAC pepper；轮换前必须设计兼容方案。
 - `PII_AUDIT_PEPPER`：IP、User-Agent 等审计摘要 pepper。
 - `RECRUITMENT_CYCLE`：M0 服务端权威招募批次；生命周期产品化见 Issue #23。
@@ -90,6 +90,8 @@ Route、调用方、Contract、测试与文档；不能留下字段、Enum、错
   同一事务中，任一步失败全部回滚。
 - AccountProvision 同时以 `idempotencyKey` 和 `(sourceType, sourceId)` 防止重复发放。
 - JoinApplication 以服务端招募批次 + 规范化 QQ / 手机号去重，不先创建 User。
+- AuthSession 只存令牌摘要；LoginThrottle 只存 QQ + IP 摘要，登录失败窗口由数据库共享。
+- 改密、密码重置和成员禁用必须在事务内撤销相关有效 Session。
 
 完整字段与状态语义见 `docs/contracts/data-contract.md`。
 

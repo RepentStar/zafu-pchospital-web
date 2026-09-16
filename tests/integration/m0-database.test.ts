@@ -6,6 +6,9 @@ import { inviteCodeService } from "../../src/features/invitations/invite-code-se
 import { joinApplicationService } from "../../src/features/recruitment/join-application-service";
 import { disconnectDb, getDb } from "../../src/lib/db/client";
 import { permissionsForRoles } from "../../src/lib/auth/permissions";
+import { authService } from "../../src/features/auth/auth-service";
+import { memberService } from "../../src/features/members/member-service";
+import { AppError } from "../../src/lib/api/errors";
 
 const enabled = process.env.RUN_DB_TESTS === "1" || process.env.npm_lifecycle_event === "test:db";
 const dbTest = enabled ? test : test.skip;
@@ -14,6 +17,8 @@ const adminId = "10000000-0000-4000-8000-000000000001";
 before(async () => {
   if (!enabled) return;
   const db = getDb();
+  await db.authSession.deleteMany();
+  await db.loginThrottle.deleteMany();
   await db.auditLog.deleteMany();
   await db.accountProvision.deleteMany();
   await db.inviteCodeRedemption.deleteMany();
@@ -159,4 +164,148 @@ dbTest("管理员不能把最大次数调低到 usedCount 以下，也不能直�
   const stored = await getDb().inviteCode.findUniqueOrThrow({ where: { id: created.id } });
   assert.equal(stored.usedCount, 0);
   assert.equal(stored.maxUses, 2);
+});
+
+dbTest("报名通过发放的 QQ 身份可登录，首次改密会轮换并撤销旧 Session", async () => {
+  const input = {
+    recruitmentCycle: `AUTH-${randomUUID().slice(0, 8)}`,
+    realName: "认证成员",
+    qq: `9${String(Date.now()).slice(-9)}`,
+    phone: `136${String(Date.now()).slice(-8)}`,
+    privacyConsent: true,
+  };
+  const receipt = await joinApplicationService.submit(input, { requestId: "req_auth_submit" });
+  const reviewed = await joinApplicationService.review(
+    {
+      applicationId: receipt.id,
+      result: "PASSED",
+      interviewedAt: new Date().toISOString(),
+      idempotencyKey: `auth-${receipt.id}`,
+    },
+    adminActor,
+  );
+  const provision = await getDb().accountProvision.findUniqueOrThrow({
+    where: { sourceType_sourceId: { sourceType: "JOIN_APPLICATION", sourceId: receipt.id } },
+  });
+  assert.equal(reviewed.provisionStatus, "SUCCEEDED");
+  assert.ok(reviewed.initializationSecret);
+  const login = await authService.login(
+    { qq: input.qq, password: reviewed.initializationSecret! },
+    { requestId: "req_auth_login", ipAddress: "127.0.0.21" },
+  );
+  assert.equal(login.mustChangePassword, true);
+  const changed = await authService.changePassword(
+    login.token,
+    {
+      currentPassword: reviewed.initializationSecret!,
+      newPassword: "Changed-Password-2026",
+      newPasswordConfirmation: "Changed-Password-2026",
+    },
+    { requestId: "req_auth_change", ipAddress: "127.0.0.21" },
+  );
+  assert.equal(changed.mustChangePassword, false);
+  await assert.rejects(
+    () => authService.authenticate(login.token),
+    (error) => error instanceof AppError && error.code === "AUTH_SESSION_INVALID",
+  );
+  assert.equal((await authService.authenticate(changed.token)).userId, provision.userId);
+  const result = await (
+    await import("../../src/features/accounts/account-provision-service")
+  ).accountProvisionService.provisionFromApplication(receipt.id, provision.idempotencyKey);
+  assert.equal(result.initializationSecret, undefined, "幂等重放不得再次泄露初始密码");
+  const credential = await getDb().passwordCredential.findUniqueOrThrow({
+    where: { userId: provision.userId! },
+  });
+  assert.equal(credential.mustChangePassword, false);
+  const identity = await getDb().userIdentity.findUniqueOrThrow({
+    where: { type_identifierNormalized: { type: "QQ", identifierNormalized: input.qq } },
+  });
+  assert.equal(identity.userId, provision.userId);
+});
+
+dbTest("邀请码注册使用自设密码且不要求首次改密", async () => {
+  const created = await inviteCodeService.create({ maxUses: 1 }, adminActor);
+  const qq = `5${String(Date.now()).slice(-9)}`;
+  const password = "Invite-Password-2026";
+  const registration = await inviteCodeService.redeem(
+    {
+      code: created.plainCode,
+      idempotencyKey: randomUUID(),
+      realName: "邀请成员",
+      qq,
+      phone: `135${String(Date.now()).slice(-8)}`,
+      password,
+    },
+    { requestId: "req_invite_auth" },
+  );
+  const login = await authService.login(
+    { qq, password },
+    { requestId: "req_invite_login", ipAddress: "127.0.0.31" },
+  );
+  assert.equal(login.userId, registration.userId);
+  assert.equal(login.mustChangePassword, false);
+});
+
+dbTest("错误密码触发数据库共享限流且不区分不存在账号", async () => {
+  const qq = `4${String(Date.now()).slice(-9)}`;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await assert.rejects(
+      () =>
+        authService.login(
+          { qq, password: "Wrong-Password-2026" },
+          { requestId: `req_bad_${attempt}`, ipAddress: "127.0.0.41" },
+        ),
+      (error) => error instanceof AppError && error.code === "AUTH_INVALID_CREDENTIALS",
+    );
+  }
+  await assert.rejects(
+    () =>
+      authService.login(
+        { qq, password: "Wrong-Password-2026" },
+        { requestId: "req_blocked", ipAddress: "127.0.0.41" },
+      ),
+    (error) => error instanceof AppError && error.code === "AUTH_RATE_LIMITED",
+  );
+  assert.equal(await getDb().loginThrottle.count(), 1);
+});
+
+dbTest("管理员直建成员幂等且只在首次返回初始密码", async () => {
+  const idempotencyKey = randomUUID();
+  const input = {
+    realName: "直建成员",
+    qq: `3${String(Date.now()).slice(-9)}`,
+    phone: `134${String(Date.now()).slice(-8)}`,
+    idempotencyKey,
+  };
+  const first = await memberService.create(input, adminActor);
+  const replay = await memberService.create(input, adminActor);
+  assert.ok(first.initializationSecret);
+  assert.equal(replay.initializationSecret, undefined);
+  assert.equal(replay.member.id, first.member.id);
+});
+
+dbTest("成员身份撤销后已有 Session 实时失效", async () => {
+  const created = await memberService.create(
+    {
+      realName: "待停用成员",
+      qq: `2${String(Date.now()).slice(-9)}`,
+      phone: `133${String(Date.now()).slice(-8)}`,
+      idempotencyKey: randomUUID(),
+    },
+    adminActor,
+  );
+  const identity = await getDb().userIdentity.findFirstOrThrow({
+    where: { userId: created.member.userId, type: "QQ" },
+  });
+  const login = await authService.login(
+    { qq: identity.identifierNormalized, password: created.initializationSecret! },
+    { requestId: "req_disable_login", ipAddress: "127.0.0.51" },
+  );
+  await memberService.setEnabled(created.member.id, false, adminActor);
+  await assert.rejects(
+    () => authService.authenticate(login.token),
+    (error) =>
+      error instanceof AppError &&
+      (error.code === "AUTH_SESSION_INVALID" || error.code === "MEMBER_PROFILE_INACTIVE"),
+  );
 });

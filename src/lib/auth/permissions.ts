@@ -7,6 +7,7 @@ export const rolePermissions: Readonly<Record<RoleCode, readonly Permission[]>> 
     "join:read",
     "join:review",
     "member:provision",
+    "member:manage",
     "invite:create",
     "invite:read",
     "invite:revoke",

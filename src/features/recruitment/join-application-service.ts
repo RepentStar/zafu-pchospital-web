@@ -20,6 +20,51 @@ import type {
 } from "@/types/contracts";
 
 export class JoinApplicationService implements JoinApplicationServiceContract {
+  async list(actor: AuthorizedActor) {
+    requirePermission(actor, "join:read");
+    const records = await getDb().joinApplication.findMany({
+      where: { deletedAt: null },
+      orderBy: { submittedAt: "desc" },
+      take: 100,
+    });
+    return records.map((record) => ({
+      ...toView(record),
+      ticketNo: record.ticketNo,
+      recruitmentCycle: record.recruitmentCycle,
+      realName: record.realName,
+      qq: record.qqNormalized,
+      phone: record.phoneNormalized,
+      submittedAt: record.submittedAt.toISOString(),
+    }));
+  }
+
+  async get(applicationId: string, actor: AuthorizedActor) {
+    requirePermission(actor, "join:read");
+    const record = await getDb().joinApplication.findUnique({
+      where: { id: applicationId },
+      include: { reviews: { orderBy: { createdAt: "desc" } } },
+    });
+    if (!record || record.deletedAt) throw new AppError("RESOURCE_NOT_FOUND", "报名记录不存在");
+    return {
+      ...toView(record),
+      ticketNo: record.ticketNo,
+      recruitmentCycle: record.recruitmentCycle,
+      realName: record.realName,
+      qq: record.qqNormalized,
+      phone: record.phoneNormalized,
+      selfIntroduction: record.selfIntroduction,
+      preferredDirection: record.preferredDirection,
+      applicantRemark: record.applicantRemark,
+      submittedAt: record.submittedAt.toISOString(),
+      reviews: record.reviews.map((review) => ({
+        id: review.id,
+        result: review.result,
+        interviewedAt: review.interviewedAt.toISOString(),
+        internalNote: review.internalNote,
+      })),
+    };
+  }
+
   async submit(
     input: SubmitJoinApplicationInput,
     context: PublicRequestContext,
@@ -151,14 +196,19 @@ export class JoinApplicationService implements JoinApplicationServiceContract {
       return updated;
     });
 
+    let initializationSecret: string | undefined;
     if (input.result === "PASSED" && prepared.provisionStatus !== "SUCCEEDED") {
       const provision = await getDb().accountProvision.findUniqueOrThrow({
         where: { sourceType_sourceId: { sourceType: "JOIN_APPLICATION", sourceId: prepared.id } },
       });
-      await accountProvisionService.provisionFromApplication(prepared.id, provision.idempotencyKey);
+      const result = await accountProvisionService.provisionFromApplication(
+        prepared.id,
+        provision.idempotencyKey,
+      );
+      initializationSecret = result.initializationSecret;
     }
     const final = await getDb().joinApplication.findUniqueOrThrow({ where: { id: prepared.id } });
-    return toView(final);
+    return { ...toView(final), ...(initializationSecret ? { initializationSecret } : {}) };
   }
 
   async retryProvision(applicationId: string, actor: AuthorizedActor): Promise<ProvisionView> {
@@ -169,6 +219,20 @@ export class JoinApplicationService implements JoinApplicationServiceContract {
     if (!provision || provision.status !== "FAILED") {
       throw new AppError("STATE_TRANSITION_INVALID", "只有失败的发放任务可以重试");
     }
+    return accountProvisionService.provisionFromApplication(
+      applicationId,
+      provision.idempotencyKey,
+    );
+  }
+
+  async provision(applicationId: string, actor: AuthorizedActor): Promise<ProvisionView> {
+    requirePermission(actor, "member:provision");
+    const provision = await getDb().accountProvision.findUnique({
+      where: { sourceType_sourceId: { sourceType: "JOIN_APPLICATION", sourceId: applicationId } },
+    });
+    if (!provision) throw new AppError("RESOURCE_NOT_FOUND", "账号发放任务不存在");
+    if (provision.status === "FAILED")
+      throw new AppError("STATE_TRANSITION_INVALID", "失败任务请使用重试接口");
     return accountProvisionService.provisionFromApplication(
       applicationId,
       provision.idempotencyKey,

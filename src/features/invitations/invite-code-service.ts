@@ -4,13 +4,14 @@ import {
   ensureMemberProfile,
   grantMemberRole,
   resolveOrCreateUser,
-  setInitialPassword,
+  setRegistrationPassword,
 } from "@/features/accounts/account-repository";
 import type { InviteCode } from "@/generated/prisma/client";
 import { AppError } from "@/lib/api/errors";
 import { appendAuditLog } from "@/lib/audit/audit-service";
 import { requirePermission } from "@/lib/auth/permissions";
 import { inSerializableTransaction } from "@/lib/db/transaction";
+import { getDb } from "@/lib/db/client";
 import { normalizePhone, normalizeQq } from "@/lib/security/normalization";
 import { digestInviteCode, generateInviteCode } from "@/lib/security/secrets";
 import type {
@@ -38,6 +39,15 @@ export function getInviteCodeEffectiveStatus(
 }
 
 export class InviteCodeService implements InviteCodeServiceContract {
+  async list(actor: AuthorizedActor): Promise<InviteCodeView[]> {
+    requirePermission(actor, "invite:read");
+    const records = await getDb().inviteCode.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    return records.map(toView);
+  }
   async create(
     input: CreateInviteCodeInput,
     actor: AuthorizedActor,
@@ -162,6 +172,12 @@ export class InviteCodeService implements InviteCodeServiceContract {
     input: RedeemInviteCodeInput,
     context: PublicRequestContext,
   ): Promise<MemberRegistrationResult> {
+    if (input.password.length < 12 || input.password.length > 128) {
+      throw new AppError("VALIDATION_FAILED", "密码长度必须为 12–128 个字符");
+    }
+    if (input.realName.trim().length < 2 || input.realName.trim().length > 64) {
+      throw new AppError("VALIDATION_FAILED", "姓名长度应为 2–64 个字符");
+    }
     const qq = normalizeQq(input.qq);
     const phone = normalizePhone(input.phone);
     const digest = digestInviteCode(input.code);
@@ -221,7 +237,7 @@ export class InviteCodeService implements InviteCodeServiceContract {
         sourceType: "INVITE_REDEMPTION",
         sourceId: code.id,
       });
-      await setInitialPassword(tx, userId, input.password);
+      await setRegistrationPassword(tx, userId, input.password);
 
       const consumed = await tx.inviteCode.updateMany({
         where: { id: code.id, status: "ACTIVE", usedCount: { lt: code.maxUses } },
