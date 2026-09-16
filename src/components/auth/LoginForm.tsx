@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
+import { loginCopy } from "@/config/auth";
 
 export function LoginForm() {
   const router = useRouter();
@@ -24,7 +26,7 @@ export function LoginForm() {
       error?: { message?: string };
     };
     if (!response.ok || !payload.success) {
-      setProblem(payload.error?.message ?? "登录失败");
+      setProblem(payload.error?.message ?? loginCopy.failed);
       setBusy(false);
       return;
     }
@@ -32,10 +34,11 @@ export function LoginForm() {
     router.refresh();
   }
   return (
-    <form className="signup__form" onSubmit={submit}>
+    <form className="auth-login__form" onSubmit={submit}>
       <Field
         name="qq"
-        label="QQ 号"
+        label={loginCopy.qqLabel}
+        placeholder={loginCopy.qqPlaceholder}
         type="text"
         autoComplete="username"
         minLength={5}
@@ -43,22 +46,18 @@ export function LoginForm() {
       />
       <Field
         name="password"
-        label="密码"
+        label={loginCopy.passwordLabel}
+        placeholder={loginCopy.passwordPlaceholder}
         type="password"
         autoComplete="current-password"
         minLength={12}
         maxLength={128}
       />
-      <div className="signup__actions">
-        <Button type="submit" variant="solid" disabled={busy}>
-          {busy ? "登录中" : "登录"}
-        </Button>
-        <Button href="/register/member" variant="ghost">
-          使用邀请码注册
-        </Button>
-      </div>
+      <Button className="auth-login__submit" type="submit" variant="solid" disabled={busy}>
+        {busy ? loginCopy.submitting : loginCopy.submit}
+      </Button>
       {problem ? (
-        <p className="signup__status signup__status--alert" role="alert">
+        <p className="auth-login__problem" role="alert">
           {problem}
         </p>
       ) : null}
@@ -69,27 +68,44 @@ export function LoginForm() {
 function Field(props: {
   name: string;
   label: string;
+  placeholder: string;
   type: string;
   autoComplete: string;
   minLength: number;
   maxLength: number;
 }) {
+  const [revealed, setRevealed] = useState(false);
+  const isPassword = props.type === "password";
   return (
     <div className="field">
       <label className="field__label" htmlFor={`auth-${props.name}`}>
         {props.label}
-        <span className="field__req">必填</span>
       </label>
-      <input
-        className="field__input"
-        id={`auth-${props.name}`}
-        name={props.name}
-        type={props.type}
-        autoComplete={props.autoComplete}
-        minLength={props.minLength}
-        maxLength={props.maxLength}
-        required
-      />
+      <div className={isPassword ? "auth-login__password" : undefined}>
+        <input
+          className="field__input"
+          id={`auth-${props.name}`}
+          name={props.name}
+          type={isPassword && revealed ? "text" : props.type}
+          inputMode={props.name === "qq" ? "numeric" : undefined}
+          placeholder={props.placeholder}
+          autoComplete={props.autoComplete}
+          minLength={props.minLength}
+          maxLength={props.maxLength}
+          required
+        />
+        {isPassword ? (
+          <button
+            className="auth-login__password-toggle"
+            type="button"
+            aria-label={revealed ? loginCopy.hidePassword : loginCopy.showPassword}
+            aria-pressed={revealed}
+            onClick={() => setRevealed((visible) => !visible)}
+          >
+            <Icon name={revealed ? "eyeOff" : "eye"} />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

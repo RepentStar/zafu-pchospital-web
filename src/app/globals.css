@@ -205,10 +205,9 @@
   --accent-wash: rgb(36 87 255 / 0.07);
   --accent-line: rgb(36 87 255 / 0.32);
 
-  /* ------------------------------------ 主题可控的视觉令牌（非颜色部分）
-     主题不只调颜色：圆角、大字号、装饰强度同样属于「主题」。
-     集中在这里，未来新增主题（Paper Green / Graphite …）可以各自调整，
-     而不需要改任何组件的结构。 */
+  /* ------------------------------------ 视觉与排版令牌（非颜色部分）
+     主题可以调整圆角与装饰强度；页面标题的字号、行高和字距属于稳定内容层级，
+     两种显示模式共用，避免切换模式时页面排版尺寸跳变。 */
   --r-frame: 0; /* 图集/照片框圆角：editorial 用直角 */
   --t-page-title: clamp(3rem, 8vw, 6.25rem); /* 内页页头主标题：海报级 */
   --page-title-leading: 1.04;
@@ -313,11 +312,9 @@ html[data-theme="black-yellow"] {
   color-scheme: dark;
 
   /* 视觉令牌：深色主题保留原设计中偏「技术」的一面 —— 4px 面板圆角、
-     常规内页标题尺度、更明显的走线栅格与扫描线、screen 混合的准星。 */
+     更明显的走线栅格与扫描线、screen 混合的准星。
+     内页标题尺度属于内容层级，不随显示模式改变，因此沿用 :root。 */
   --r-frame: var(--r-mid);
-  --t-page-title: var(--t-2xl);
-  --page-title-leading: 1.14;
-  --page-title-tracking: -0.015em;
   --deco-grid-line: var(--line-soft);
   --deco-scan: oklch(85% 0.175 99 / 0.028);
   --deco-watermark: oklch(85% 0.175 99 / 0.16);
@@ -558,7 +555,7 @@ html[data-theme="black-yellow"] {
     border-bottom: 1px solid var(--line-soft);
   }
 
-  /* 内页页头主标题：字号、行高与字距由主题决定（editorial 方向用海报级字号） */
+  /* 内页页头主标题：两种显示模式共用同一排版尺度 */
   .page-head .sec-title {
     font-size: var(--t-page-title);
     line-height: var(--page-title-leading);
@@ -2109,6 +2106,170 @@ html[data-theme="black-yellow"] {
   .signup__status--alert {
     flex-basis: 100%;
     color: var(--accent-deep);
+  }
+
+  /* ---------------------------------------------------------- 成员登录
+     登录属于高频工具入口，不沿用展示型内页的大标题。账号面板保持窄、居中、
+     无阴影；左侧索引栏仍可用，但默认降低存在感，聚焦时恢复。 */
+  .auth-login {
+    display: grid;
+    align-items: center;
+    min-height: 100svh;
+    padding-block: clamp(6rem, 12vh, 8rem) var(--s-8);
+  }
+  .auth-login > .shell {
+    display: grid;
+    place-items: center;
+  }
+  .auth-login__panel {
+    display: grid;
+    gap: var(--s-5);
+    width: min(100%, 440px);
+    padding: clamp(1.5rem, 4vw, 2.25rem);
+    border: 1px solid var(--line);
+    border-radius: var(--r-mid);
+    background: var(--surface-1);
+  }
+  .auth-login__brand {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    gap: var(--s-3);
+    color: var(--ink-3);
+    font-family: var(--font-latin);
+    font-size: var(--t-micro);
+    font-weight: 750;
+    letter-spacing: 0.16em;
+  }
+  .auth-login__brand b {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border: 1px solid var(--accent-line);
+    border-radius: var(--r-base);
+    color: var(--accent);
+    font-size: var(--t-sm);
+    letter-spacing: 0;
+  }
+  .auth-login__brand:hover,
+  .auth-login__brand:focus-visible {
+    color: var(--accent-deep);
+  }
+  .auth-login__header {
+    padding-bottom: var(--s-5);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .auth-login__header .eyebrow {
+    margin: 0 0 var(--s-2);
+  }
+  .auth-login__header h1 {
+    margin: 0;
+    font-size: clamp(2.25rem, 5vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+  .auth-login__header > p:last-child {
+    margin: var(--s-3) 0 0;
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--ink-3);
+  }
+  .auth-login__form {
+    display: grid;
+    gap: var(--s-4);
+  }
+  .auth-login__password {
+    position: relative;
+  }
+  .auth-login__password .field__input {
+    padding-right: 3.25rem;
+  }
+  .auth-login__password-toggle {
+    position: absolute;
+    top: 50%;
+    right: var(--s-2);
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: var(--r-base);
+    color: var(--ink-3);
+    transform: translateY(-50%);
+    transition:
+      color var(--d-fast) var(--ease-quart),
+      background var(--d-fast) var(--ease-quart);
+  }
+  .auth-login__password-toggle:hover,
+  .auth-login__password-toggle:focus-visible {
+    background: var(--surface-2);
+    color: var(--accent-deep);
+  }
+  .auth-login__password-toggle svg {
+    width: 18px;
+    height: 18px;
+  }
+  .auth-login__submit.btn {
+    width: 100%;
+    justify-content: center;
+    margin-top: var(--s-2);
+  }
+  .auth-login__problem {
+    margin: 0;
+    font-size: var(--t-xs);
+    line-height: 1.7;
+    color: var(--accent-deep);
+  }
+  .auth-login__links {
+    display: grid;
+    justify-items: center;
+    gap: var(--s-3);
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--line-soft);
+    text-align: center;
+  }
+  .auth-login__links p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--ink-3);
+  }
+  .auth-login__links p a,
+  .auth-login__home {
+    color: var(--ink);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: var(--accent-line);
+    text-underline-offset: 0.22em;
+  }
+  .auth-login__home {
+    font-size: var(--t-xs);
+    color: var(--ink-4);
+  }
+  .auth-login__links a:hover,
+  .auth-login__links a:focus-visible {
+    color: var(--accent-deep);
+    text-decoration-color: currentColor;
+  }
+
+  body:has(.auth-login) .rail {
+    opacity: 0.52;
+    transition: opacity var(--d-mid) var(--ease-quart);
+  }
+  body:has(.auth-login) .rail:hover,
+  body:has(.auth-login) .rail:focus-within {
+    opacity: 1;
+  }
+
+  @media (max-width: 759px) {
+    .auth-login {
+      min-height: auto;
+      padding-block: 6.5rem var(--s-7);
+    }
+    .auth-login__panel {
+      padding-inline: var(--s-5);
+    }
   }
 
   /* ---------------------------------------------------- 维修记录工作台
