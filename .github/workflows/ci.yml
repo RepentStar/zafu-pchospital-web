@@ -103,9 +103,9 @@ jobs:
           cache: pnpm
 
       - name: 安装依赖
-        # CI 依赖版本已由 pnpm-lock.yaml 精确固定；关闭 pnpm 12 的新包等待期，
-        # 避免锁文件中的合法版本仅因发布时间不足 24 小时而阻断构建。
-        run: pnpm --config.minimum-release-age=0 install --frozen-lockfile
+        # minimumReleaseAge 在 pnpm-workspace.yaml 中统一设为 0，确保后续 lint/build
+        # 等每条 pnpm 命令都不会再次启用新包等待期。
+        run: pnpm install --frozen-lockfile
 
       # pnpm lint = ESLint + 主题调色板一致性校验
       - name: 检查（lint + 调色板一致性）
@@ -183,7 +183,7 @@ jobs:
           cache: pnpm
 
       - name: 安装依赖
-        run: pnpm --config.minimum-release-age=0 install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       # 用 verify 里已解析并校验过的那个 sha，而不是重新解一次引用 ——
       # 否则部署的可能不是刚刚验证过的文档版本。
