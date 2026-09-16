@@ -55,6 +55,10 @@ HttpOnly、SameSite=Lax、Path=/，生产环境启用 Secure。
 - `POST /api/v1/admin/members/:id/enable`
 - `POST /api/v1/admin/members/:id/password-reset`
 
+报名列表接受 `page`、`pageSize`、`status`、`provisionStatus`、`submittedFrom`、
+`submittedTo` 与 `query`；列表只返回脱敏 QQ/手机号，完整联系方式、内部备注和审核记录只在
+管理员详情接口返回。邀请码注册要求密码确认，并与报名入口一样执行公开写限流。
+
 这些端点的输入/输出 Service 契约位于 `src/types/contracts.ts`。管理员路径不是权限边界；
 Route Handler 必须从数据库 Session、账号状态和有效 UserRole 构造 actor，Service 再
 调用 `requirePermission`；不得信任客户端传入的角色或权限。

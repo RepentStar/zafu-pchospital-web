@@ -1,19 +1,44 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { AppError } from "../../src/lib/api/errors";
+import { ApiErrorCode, AppError } from "../../src/lib/api/errors";
 import { enforceRateLimit, resetRateLimitsForTests } from "../../src/lib/api/rate-limit";
 import { maskPhone, maskQq, redactAuditSummary } from "../../src/lib/audit/redaction";
 import { normalizePhone, normalizeQq } from "../../src/lib/security/normalization";
-import { digestSessionToken } from "../../src/lib/security/secrets";
+import { digestSessionToken, hashPassword, verifyPassword } from "../../src/lib/security/secrets";
 import { resetServerEnvForTests } from "../../src/lib/env";
 import { assertSameOrigin, sessionCookie } from "../../src/lib/auth/request";
+import { authenticateRequest } from "../../src/lib/auth/request";
+import { submitMemberSignup } from "../../src/lib/member-signup";
 import { JoinApplicationStatus, Permission, RoleCode } from "../../src/types/contracts";
 
 test("公共枚举不包含重复值", () => {
   for (const values of [JoinApplicationStatus, Permission, RoleCode]) {
     assert.equal(new Set(values).size, values.length);
   }
+});
+
+test("M1 稳定错误码已进入公共契约", () => {
+  for (const code of [
+    "AUTH_INVALID_CREDENTIALS",
+    "AUTH_SESSION_INVALID",
+    "AUTH_SESSION_EXPIRED",
+    "AUTH_RATE_LIMITED",
+    "PASSWORD_CHANGE_REQUIRED",
+    "PASSWORD_CURRENT_INVALID",
+    "PASSWORD_CONFIRMATION_MISMATCH",
+    "ACCOUNT_DISABLED",
+    "MEMBER_PROFILE_INACTIVE",
+  ]) {
+    assert.equal(ApiErrorCode.includes(code as (typeof ApiErrorCode)[number]), true);
+  }
+});
+
+test("无 Cookie 的受保护请求返回未登录", async () => {
+  await assert.rejects(
+    () => authenticateRequest(new Request("http://localhost/api/v1/me"), "req_no_cookie"),
+    (error) => error instanceof AppError && error.code === "UNAUTHENTICATED",
+  );
 });
 
 test("QQ 与手机号规范化只产生受控格式", () => {
@@ -91,4 +116,40 @@ test("Cookie 安全属性与写接口同源校验保持固定", () => {
       ),
     AppError,
   );
+});
+
+test("密码只以 scrypt 哈希校验", async () => {
+  const hash = await hashPassword("Unit-Password-2026");
+  assert.match(hash, /^scrypt\$/);
+  assert.equal(await verifyPassword("Unit-Password-2026", hash), true);
+  assert.equal(await verifyPassword("Wrong-Password-2026", hash), false);
+});
+
+test("/join 重复报名信封映射为成功回执", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        success: true,
+        data: {
+          ticketNo: "JA-TEST",
+          submittedAt: "2026-09-16T00:00:00.000Z",
+          duplicate: true,
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  try {
+    assert.deepEqual(
+      await submitMemberSignup({ qq: "123456789", realName: "测试成员", phone: "13800000000" }),
+      {
+        ok: true,
+        ticket: "JA-TEST",
+        submittedAt: "2026-09-16T00:00:00.000Z",
+        duplicate: true,
+      },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

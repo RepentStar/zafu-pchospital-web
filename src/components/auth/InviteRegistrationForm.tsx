@@ -12,6 +12,11 @@ export function InviteRegistrationForm() {
     setBusy(true);
     setProblem("");
     const data = Object.fromEntries(new FormData(event.currentTarget));
+    if (data.password !== data.passwordConfirmation) {
+      setProblem("两次输入的密码不一致");
+      setBusy(false);
+      return;
+    }
     const response = await fetch("/api/v1/member-registrations/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -34,6 +39,7 @@ export function InviteRegistrationForm() {
     ["studentId", "学号（选填）", "text", "off"],
     ["className", "班级（选填）", "text", "off"],
     ["password", "密码", "password", "new-password"],
+    ["passwordConfirmation", "确认密码", "password", "new-password"],
   ] as const;
   return (
     <form className="signup__form" onSubmit={submit}>
@@ -41,6 +47,9 @@ export function InviteRegistrationForm() {
         <div className="field" key={name}>
           <label className="field__label" htmlFor={`register-${name}`}>
             {label}
+            {name !== "studentId" && name !== "className" ? (
+              <span className="field__req">必填</span>
+            ) : null}
           </label>
           <input
             className="field__input"
@@ -48,8 +57,8 @@ export function InviteRegistrationForm() {
             name={name}
             type={type}
             autoComplete={autoComplete}
-            minLength={name === "password" ? 12 : undefined}
-            maxLength={name === "password" ? 128 : 80}
+            minLength={type === "password" ? 12 : undefined}
+            maxLength={type === "password" ? 128 : 80}
             required={name !== "studentId" && name !== "className"}
           />
         </div>

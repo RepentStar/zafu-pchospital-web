@@ -133,6 +133,41 @@ export type JoinApplicationView = {
   initializationSecret?: string;
 };
 
+export type JoinApplicationListInput = PaginationInput & {
+  status?: JoinApplicationStatus;
+  provisionStatus?: ProvisionStatus;
+  submittedFrom?: string;
+  submittedTo?: string;
+  query?: string;
+};
+
+export type JoinApplicationSummary = JoinApplicationView & {
+  ticketNo: string;
+  recruitmentCycle: string;
+  realName: string;
+  qqMasked: string;
+  phoneMasked: string;
+  submittedAt: string;
+};
+
+export type JoinApplicationDetail = JoinApplicationView & {
+  ticketNo: string;
+  recruitmentCycle: string;
+  realName: string;
+  qq: string;
+  phone: string;
+  selfIntroduction: string | null;
+  preferredDirection: string | null;
+  applicantRemark: string | null;
+  submittedAt: string;
+  reviews: Array<{
+    id: string;
+    result: string;
+    interviewedAt: string;
+    internalNote: string | null;
+  }>;
+};
+
 export type CreateInviteCodeInput = {
   activeFrom?: string | null;
   expiresAt?: string | null;
@@ -210,9 +245,15 @@ export type MemberView = {
 export type MemberMutationResult = { member: MemberView; initializationSecret?: string };
 
 export interface JoinApplicationServiceContract {
+  list(
+    input: JoinApplicationListInput,
+    actor: AuthorizedActor,
+  ): Promise<{ items: JoinApplicationSummary[]; pagination: PaginationMeta }>;
+  get(applicationId: string, actor: AuthorizedActor): Promise<JoinApplicationDetail>;
   submit(input: SubmitJoinApplicationInput, context: PublicRequestContext): Promise<JoinReceipt>;
   review(input: ReviewJoinApplicationInput, actor: AuthorizedActor): Promise<JoinApplicationView>;
   retryProvision(applicationId: string, actor: AuthorizedActor): Promise<ProvisionView>;
+  provision(applicationId: string, actor: AuthorizedActor): Promise<ProvisionView>;
 }
 
 export interface InviteCodeServiceContract {

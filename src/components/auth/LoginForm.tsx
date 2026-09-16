@@ -53,6 +53,9 @@ export function LoginForm() {
         <Button type="submit" variant="solid" disabled={busy}>
           {busy ? "登录中" : "登录"}
         </Button>
+        <Button href="/register/member" variant="ghost">
+          使用邀请码注册
+        </Button>
       </div>
       {problem ? (
         <p className="signup__status signup__status--alert" role="alert">
@@ -75,6 +78,7 @@ function Field(props: {
     <div className="field">
       <label className="field__label" htmlFor={`auth-${props.name}`}>
         {props.label}
+        <span className="field__req">必填</span>
       </label>
       <input
         className="field__input"

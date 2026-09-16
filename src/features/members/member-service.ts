@@ -142,6 +142,15 @@ export class MemberService {
           where: { userId: profile.userId, revokedAt: null },
           data: { revokedAt: new Date() },
         });
+        await appendAuditLog(tx, {
+          actor,
+          actorType: "USER",
+          actorUserId: actor.userId,
+          action: "auth.session.revoked",
+          targetType: "User",
+          targetId: profile.userId,
+          result: "SUCCESS",
+        });
       }
       await appendAuditLog(tx, {
         actor,
@@ -183,9 +192,18 @@ export class MemberService {
         actor,
         actorType: "USER",
         actorUserId: actor.userId,
-        action: "member.password.reset",
+        action: "auth.password.reset",
         targetType: "MemberProfile",
         targetId: memberId,
+        result: "SUCCESS",
+      });
+      await appendAuditLog(tx, {
+        actor,
+        actorType: "USER",
+        actorUserId: actor.userId,
+        action: "auth.session.revoked",
+        targetType: "User",
+        targetId: profile.userId,
         result: "SUCCESS",
       });
     });

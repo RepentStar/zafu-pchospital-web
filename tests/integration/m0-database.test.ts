@@ -9,6 +9,7 @@ import { permissionsForRoles } from "../../src/lib/auth/permissions";
 import { authService } from "../../src/features/auth/auth-service";
 import { memberService } from "../../src/features/members/member-service";
 import { AppError } from "../../src/lib/api/errors";
+import { authenticateRequest, SESSION_COOKIE_NAME } from "../../src/lib/auth/request";
 
 const enabled = process.env.RUN_DB_TESTS === "1" || process.env.npm_lifecycle_event === "test:db";
 const dbTest = enabled ? test : test.skip;
@@ -97,6 +98,14 @@ dbTest("重复报名返回原回执且不重复写入", async () => {
     await getDb().joinApplication.count({ where: { recruitmentCycle: input.recruitmentCycle } }),
     1,
   );
+  const listed = await joinApplicationService.list(
+    { page: 1, pageSize: 20, status: "SUBMITTED", query: input.qq },
+    adminActor,
+  );
+  assert.equal(listed.pagination.total, 1);
+  assert.equal(listed.items[0]?.ticketNo, first.ticketNo);
+  assert.notEqual(listed.items[0]?.qqMasked, input.qq);
+  assert.notEqual(listed.items[0]?.phoneMasked, input.phone);
 });
 
 dbTest("面试通过重复执行不创建重复账号、档案或角色", async () => {
@@ -194,6 +203,20 @@ dbTest("报名通过发放的 QQ 身份可登录，首次改密会轮换并撤�
     { requestId: "req_auth_login", ipAddress: "127.0.0.21" },
   );
   assert.equal(login.mustChangePassword, true);
+  await assert.rejects(
+    () =>
+      authenticateRequest(
+        new Request("http://localhost/member", {
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${login.token}` },
+        }),
+        "req_forced_password",
+      ),
+    (error) => error instanceof AppError && error.code === "PASSWORD_CHANGE_REQUIRED",
+  );
+  const otherLogin = await authService.login(
+    { qq: input.qq, password: reviewed.initializationSecret! },
+    { requestId: "req_auth_login_other", ipAddress: "127.0.0.22" },
+  );
   const changed = await authService.changePassword(
     login.token,
     {
@@ -206,6 +229,10 @@ dbTest("报名通过发放的 QQ 身份可登录，首次改密会轮换并撤�
   assert.equal(changed.mustChangePassword, false);
   await assert.rejects(
     () => authService.authenticate(login.token),
+    (error) => error instanceof AppError && error.code === "AUTH_SESSION_INVALID",
+  );
+  await assert.rejects(
+    () => authService.authenticate(otherLogin.token),
     (error) => error instanceof AppError && error.code === "AUTH_SESSION_INVALID",
   );
   assert.equal((await authService.authenticate(changed.token)).userId, provision.userId);
@@ -244,20 +271,58 @@ dbTest("邀请码注册使用自设密码且不要求首次改密", async () => 
   );
   assert.equal(login.userId, registration.userId);
   assert.equal(login.mustChangePassword, false);
+  const stored = await getDb().authSession.findUniqueOrThrow({ where: { id: login.sessionId } });
+  assert.notEqual(
+    Buffer.from(stored.tokenDigest).toString("hex"),
+    Buffer.from(login.token).toString("hex"),
+  );
+  const expiring = await authService.login(
+    { qq, password },
+    { requestId: "req_invite_expiring", ipAddress: "127.0.0.32" },
+  );
+  await getDb().authSession.update({
+    where: { id: expiring.sessionId },
+    data: { expiresAt: new Date(Date.now() - 1_000) },
+  });
+  await assert.rejects(
+    () => authService.authenticate(expiring.token),
+    (error) => error instanceof AppError && error.code === "AUTH_SESSION_EXPIRED",
+  );
+  await authService.logout(login.token, { requestId: "req_invite_logout" });
+  await assert.rejects(
+    () => authService.authenticate(login.token),
+    (error) => error instanceof AppError && error.code === "AUTH_SESSION_INVALID",
+  );
+  assert.ok(
+    await getDb().auditLog.findFirst({
+      where: { action: "auth.session.revoked", targetId: login.sessionId },
+    }),
+  );
 });
 
 dbTest("错误密码触发数据库共享限流且不区分不存在账号", async () => {
   const qq = `4${String(Date.now()).slice(-9)}`;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    await assert.rejects(
-      () =>
-        authService.login(
-          { qq, password: "Wrong-Password-2026" },
-          { requestId: `req_bad_${attempt}`, ipAddress: "127.0.0.41" },
-        ),
-      (error) => error instanceof AppError && error.code === "AUTH_INVALID_CREDENTIALS",
-    );
-  }
+  const attempts = await Promise.allSettled(
+    Array.from({ length: 5 }, (_, attempt) =>
+      authService.login(
+        { qq, password: "Wrong-Password-2026" },
+        { requestId: `req_bad_${attempt}`, ipAddress: "127.0.0.41" },
+      ),
+    ),
+  );
+  assert.equal(
+    attempts.every((result) => result.status === "rejected"),
+    true,
+  );
+  assert.equal(
+    attempts.every(
+      (result) =>
+        result.status === "rejected" &&
+        result.reason instanceof AppError &&
+        result.reason.code === "AUTH_INVALID_CREDENTIALS",
+    ),
+    true,
+  );
   await assert.rejects(
     () =>
       authService.login(
@@ -307,5 +372,27 @@ dbTest("成员身份撤销后已有 Session 实时失效", async () => {
     (error) =>
       error instanceof AppError &&
       (error.code === "AUTH_SESSION_INVALID" || error.code === "MEMBER_PROFILE_INACTIVE"),
+  );
+});
+
+dbTest("普通成员不能调用管理员成员 Service", async () => {
+  await assert.rejects(
+    () =>
+      memberService.create(
+        {
+          realName: "越权成员",
+          qq: "223456789",
+          phone: "13200000000",
+          idempotencyKey: randomUUID(),
+        },
+        {
+          actorType: "USER",
+          userId: "20000000-0000-4000-8000-000000000099",
+          userStatus: "ACTIVE",
+          permissions: permissionsForRoles(["MEMBER"]),
+          requestId: "req_member_forbidden",
+        },
+      ),
+    (error) => error instanceof AppError && error.code === "FORBIDDEN",
   );
 });

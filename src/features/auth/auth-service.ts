@@ -152,6 +152,15 @@ export class AuthService {
         targetId: session.id,
         result: "SUCCESS",
       });
+      await appendAuditLog(tx, {
+        actor: context,
+        actorType: "USER",
+        actorUserId: session.userId,
+        action: "auth.session.revoked",
+        targetType: "AuthSession",
+        targetId: session.id,
+        result: "SUCCESS",
+      });
     });
   }
 
@@ -193,6 +202,15 @@ export class AuthService {
           lastSeenAt: now,
           expiresAt,
         },
+      });
+      await appendAuditLog(tx, {
+        actor: context,
+        actorType: "USER",
+        actorUserId: current.userId,
+        action: "auth.session.revoked",
+        targetType: "AuthSession",
+        targetId: current.sessionId,
+        result: "SUCCESS",
       });
       await appendAuditLog(tx, {
         actor: context,

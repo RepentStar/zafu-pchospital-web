@@ -39,6 +39,7 @@ export function ChangePasswordForm() {
         <div className="field" key={name}>
           <label className="field__label" htmlFor={`password-${name}`}>
             {label}
+            <span className="field__req">必填</span>
           </label>
           <input
             className="field__input"

@@ -34,6 +34,7 @@ export async function authenticateRequest(
 }> {
   const context = requestContext(request, requestId);
   const token = readSessionToken(request);
+  if (!token) throw new AppError("UNAUTHENTICATED", "请先登录");
   const principal = await authService.authenticate(token);
   if (principal.mustChangePassword && !allowForcedPasswordChange)
     throw new AppError("PASSWORD_CHANGE_REQUIRED", "请先修改初始密码");

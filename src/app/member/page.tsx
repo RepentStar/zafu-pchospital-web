@@ -29,7 +29,7 @@ export default async function MemberPage() {
         <h2 className="sr-only" id="member-panel-title">
           成员信息
         </h2>
-        <MemberPanel name={principal.displayName ?? "成员"} />
+        <MemberPanel name={principal.displayName ?? "成员"} roles={principal.roles} />
       </Section>
     </>
   );
