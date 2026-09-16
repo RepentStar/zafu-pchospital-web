@@ -600,14 +600,13 @@ border-color: var(--line);
 | 令牌                     | 用途                      | normal                   | dark                    |
 | ------------------------ | ------------------------- | ------------------------ | ----------------------- |
 | `--r-frame`              | 图集 / 照片框圆角         | `0`（直角，接近印刷品）  | `var(--r-mid)`          |
-| `--t-page-title`         | 内页页头主标题字号        | `clamp(3rem, 8vw, 6.25rem)` 海报级 | `var(--t-2xl)` 常规 |
-| `--page-title-leading`   | 同上，行高                | `1.04`                   | `1.14`                  |
-| `--page-title-tracking`  | 同上，字距                | `-0.025em`               | `-0.015em`              |
 | `--deco-grid-line`       | 背景走线栅格的线色        | `var(--line)`            | `var(--line-soft)`      |
 | `--deco-scan`            | 扫描质感带                | 钴蓝 5%                  | 信号黄 2.8%             |
 | `--deco-watermark`       | 首页水印字形描边          | 钴蓝 17%                 | 信号黄 16%              |
 | `--deco-reticle-blend`   | 指针准星的混合模式        | `multiply`               | `screen`                |
 | `--rail-panel`           | 左侧索引栏面板的渐变起点  | `var(--surface-1)` 做亮  | `var(--bg-deep)` 做暗   |
+
+页面内标题的字号、行高与字距属于信息层级，不随显示模式切换；模式只改变颜色、材质与装饰效果，避免相同内容在浅色/深色模式下发生布局跳动。
 
 > `--deco-reticle-blend` 是个例子：准星原本写死 `mix-blend-mode: screen`，
 > 这在深色底上成立、在暖白底上会让准星彻底看不见。装饰类取值必须同样令牌化。
