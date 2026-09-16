@@ -1,7 +1,7 @@
 generator client {
-  provider   = "prisma-client"
-  output     = "../src/generated/prisma"
-  engineType = "client"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  engineType   = "client"
   moduleFormat = "esm"
 }
 
@@ -10,25 +10,54 @@ datasource db {
 }
 
 model User {
-  id                  String               @id @db.Char(36)
-  status              String               @db.VarChar(32)
-  displayName         String?              @map("display_name") @db.VarChar(80)
-  createdAt           DateTime             @map("created_at") @db.DateTime(3)
-  updatedAt           DateTime             @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt           DateTime?            @map("deleted_at") @db.DateTime(3)
-  identities          UserIdentity[]
-  passwordCredential  PasswordCredential?
-  roles               UserRole[]           @relation("UserRoles")
-  rolesGranted        UserRole[]           @relation("GrantedBy")
-  memberProfile       MemberProfile?
-  reviews             JoinApplicationReview[]
-  inviteCodesCreated  InviteCode[]
-  redemptions         InviteCodeRedemption[]
-  provisions          AccountProvision[]
-  auditLogs           AuditLog[]
+  id                 String                  @id @db.Char(36)
+  status             String                  @db.VarChar(32)
+  displayName        String?                 @map("display_name") @db.VarChar(80)
+  createdAt          DateTime                @map("created_at") @db.DateTime(3)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt          DateTime?               @map("deleted_at") @db.DateTime(3)
+  identities         UserIdentity[]
+  passwordCredential PasswordCredential?
+  roles              UserRole[]              @relation("UserRoles")
+  rolesGranted       UserRole[]              @relation("GrantedBy")
+  memberProfile      MemberProfile?
+  reviews            JoinApplicationReview[]
+  inviteCodesCreated InviteCode[]
+  redemptions        InviteCodeRedemption[]
+  provisions         AccountProvision[]
+  auditLogs          AuditLog[]
+  authSessions       AuthSession[]
 
   @@index([status, deletedAt], map: "users_status_deleted_idx")
   @@map("users")
+}
+
+model AuthSession {
+  id              String    @id @db.Char(36)
+  userId          String    @map("user_id") @db.Char(36)
+  tokenDigest     Bytes     @unique(map: "auth_sessions_token_digest_uq") @map("token_digest") @db.Binary(32)
+  createdAt       DateTime  @map("created_at") @db.DateTime(3)
+  lastSeenAt      DateTime  @map("last_seen_at") @db.DateTime(3)
+  expiresAt       DateTime  @map("expires_at") @db.DateTime(3)
+  revokedAt       DateTime? @map("revoked_at") @db.DateTime(3)
+  ipDigest        Bytes?    @map("ip_digest") @db.Binary(32)
+  userAgentDigest Bytes?    @map("user_agent_digest") @db.Binary(32)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, revokedAt, expiresAt], map: "auth_sessions_user_revoked_expires_idx")
+  @@index([expiresAt], map: "auth_sessions_expires_idx")
+  @@map("auth_sessions")
+}
+
+model LoginThrottle {
+  keyDigest       Bytes     @id @map("key_digest") @db.Binary(32)
+  failedCount     Int       @default(0) @map("failed_count")
+  windowStartedAt DateTime  @map("window_started_at") @db.DateTime(3)
+  blockedUntil    DateTime? @map("blocked_until") @db.DateTime(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  @@index([blockedUntil], map: "login_throttles_blocked_idx")
+  @@map("login_throttles")
 }
 
 model UserIdentity {
@@ -89,45 +118,45 @@ model UserRole {
 }
 
 model MemberProfile {
-  id            String                 @id @db.Char(36)
-  userId        String                 @unique(map: "member_profiles_user_uq") @map("user_id") @db.Char(36)
-  realName      String                 @map("real_name") @db.VarChar(64)
-  studentId     String?                @map("student_id") @db.VarChar(32)
-  className     String?                @map("class_name") @db.VarChar(80)
-  nickname      String?                @db.VarChar(64)
-  avatarUrl     String?                @map("avatar_url") @db.VarChar(500)
-  status        String                 @db.VarChar(32)
-  joinedAt      DateTime               @map("joined_at") @db.DateTime(3)
-  createdAt     DateTime               @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime               @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt     DateTime?              @map("deleted_at") @db.DateTime(3)
-  user          User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
-  redemptions   InviteCodeRedemption[]
-  provisions    AccountProvision[]
+  id          String                 @id @db.Char(36)
+  userId      String                 @unique(map: "member_profiles_user_uq") @map("user_id") @db.Char(36)
+  realName    String                 @map("real_name") @db.VarChar(64)
+  studentId   String?                @map("student_id") @db.VarChar(32)
+  className   String?                @map("class_name") @db.VarChar(80)
+  nickname    String?                @db.VarChar(64)
+  avatarUrl   String?                @map("avatar_url") @db.VarChar(500)
+  status      String                 @db.VarChar(32)
+  joinedAt    DateTime               @map("joined_at") @db.DateTime(3)
+  createdAt   DateTime               @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt   DateTime?              @map("deleted_at") @db.DateTime(3)
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  redemptions InviteCodeRedemption[]
+  provisions  AccountProvision[]
 
   @@index([status, deletedAt], map: "member_profiles_status_deleted_idx")
   @@map("member_profiles")
 }
 
 model JoinApplication {
-  id                   String                    @id @db.Char(36)
-  ticketNo             String                    @unique(map: "join_applications_ticket_uq") @map("ticket_no") @db.VarChar(32)
-  recruitmentCycle     String                    @map("recruitment_cycle") @db.VarChar(32)
-  realName             String                    @map("real_name") @db.VarChar(64)
-  qqNormalized         String                    @map("qq_normalized") @db.VarChar(32)
-  phoneNormalized      String                    @map("phone_normalized") @db.VarChar(32)
-  selfIntroduction     String?                   @map("self_introduction") @db.Text
-  preferredDirection   String?                   @map("preferred_direction") @db.VarChar(120)
-  applicantRemark      String?                   @map("applicant_remark") @db.VarChar(500)
-  status               String                    @db.VarChar(32)
-  provisionStatus      String                    @map("provision_status") @db.VarChar(32)
-  privacyConsentAt     DateTime                  @map("privacy_consent_at") @db.DateTime(3)
-  submittedAt          DateTime                  @map("submitted_at") @db.DateTime(3)
-  lastReviewedAt       DateTime?                 @map("last_reviewed_at") @db.DateTime(3)
-  createdAt            DateTime                  @map("created_at") @db.DateTime(3)
-  updatedAt            DateTime                  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt            DateTime?                 @map("deleted_at") @db.DateTime(3)
-  reviews              JoinApplicationReview[]
+  id                 String                  @id @db.Char(36)
+  ticketNo           String                  @unique(map: "join_applications_ticket_uq") @map("ticket_no") @db.VarChar(32)
+  recruitmentCycle   String                  @map("recruitment_cycle") @db.VarChar(32)
+  realName           String                  @map("real_name") @db.VarChar(64)
+  qqNormalized       String                  @map("qq_normalized") @db.VarChar(32)
+  phoneNormalized    String                  @map("phone_normalized") @db.VarChar(32)
+  selfIntroduction   String?                 @map("self_introduction") @db.Text
+  preferredDirection String?                 @map("preferred_direction") @db.VarChar(120)
+  applicantRemark    String?                 @map("applicant_remark") @db.VarChar(500)
+  status             String                  @db.VarChar(32)
+  provisionStatus    String                  @map("provision_status") @db.VarChar(32)
+  privacyConsentAt   DateTime                @map("privacy_consent_at") @db.DateTime(3)
+  submittedAt        DateTime                @map("submitted_at") @db.DateTime(3)
+  lastReviewedAt     DateTime?               @map("last_reviewed_at") @db.DateTime(3)
+  createdAt          DateTime                @map("created_at") @db.DateTime(3)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt          DateTime?               @map("deleted_at") @db.DateTime(3)
+  reviews            JoinApplicationReview[]
 
   @@unique([recruitmentCycle, qqNormalized], map: "join_applications_cycle_qq_uq")
   @@unique([recruitmentCycle, phoneNormalized], map: "join_applications_cycle_phone_uq")
@@ -137,15 +166,15 @@ model JoinApplication {
 }
 
 model JoinApplicationReview {
-  id               String          @id @db.Char(36)
-  applicationId    String          @map("application_id") @db.Char(36)
-  result           String          @db.VarChar(32)
-  interviewedAt    DateTime        @map("interviewed_at") @db.DateTime(3)
-  reviewerUserId   String          @map("reviewer_user_id") @db.Char(36)
-  internalNote     String?         @map("internal_note") @db.VarChar(2000)
-  createdAt        DateTime        @map("created_at") @db.DateTime(3)
-  application      JoinApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
-  reviewer         User            @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+  id             String          @id @db.Char(36)
+  applicationId  String          @map("application_id") @db.Char(36)
+  result         String          @db.VarChar(32)
+  interviewedAt  DateTime        @map("interviewed_at") @db.DateTime(3)
+  reviewerUserId String          @map("reviewer_user_id") @db.Char(36)
+  internalNote   String?         @map("internal_note") @db.VarChar(2000)
+  createdAt      DateTime        @map("created_at") @db.DateTime(3)
+  application    JoinApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  reviewer       User            @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
 
   @@index([applicationId, createdAt], map: "join_reviews_application_created_idx")
   @@map("join_application_reviews")

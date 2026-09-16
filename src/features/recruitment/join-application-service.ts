@@ -1,16 +1,20 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { accountProvisionService } from "@/features/accounts/account-provision-service";
-import type { JoinApplication } from "@/generated/prisma/client";
+import type { JoinApplication, Prisma } from "@/generated/prisma/client";
 import { AppError } from "@/lib/api/errors";
 import { appendAuditLog } from "@/lib/audit/audit-service";
+import { maskPhone, maskQq } from "@/lib/audit/redaction";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
 import { inSerializableTransaction } from "@/lib/db/transaction";
 import { normalizePhone, normalizeQq } from "@/lib/security/normalization";
 import type {
   AuthorizedActor,
+  JoinApplicationDetail,
+  JoinApplicationListInput,
   JoinApplicationServiceContract,
+  JoinApplicationSummary,
   JoinApplicationView,
   JoinReceipt,
   ProvisionView,
@@ -20,6 +24,77 @@ import type {
 } from "@/types/contracts";
 
 export class JoinApplicationService implements JoinApplicationServiceContract {
+  async list(input: JoinApplicationListInput, actor: AuthorizedActor) {
+    requirePermission(actor, "join:read");
+    const page = Number.isInteger(input.page) && input.page > 0 ? input.page : 1;
+    const pageSize =
+      Number.isInteger(input.pageSize) && input.pageSize > 0 && input.pageSize <= 100
+        ? input.pageSize
+        : 20;
+    const submittedFrom = parseFilterDate(input.submittedFrom, "开始时间");
+    const submittedTo = parseFilterDate(input.submittedTo, "结束时间");
+    if (submittedFrom && submittedTo && submittedTo < submittedFrom) {
+      throw new AppError("VALIDATION_FAILED", "结束时间不能早于开始时间");
+    }
+    const where: Prisma.JoinApplicationWhereInput = {
+      deletedAt: null,
+      status: input.status,
+      provisionStatus: input.provisionStatus,
+      submittedAt:
+        submittedFrom || submittedTo ? { gte: submittedFrom, lte: submittedTo } : undefined,
+      OR: buildSearch(input.query),
+    };
+    const [records, total] = await Promise.all([
+      getDb().joinApplication.findMany({
+        where,
+        orderBy: { submittedAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      getDb().joinApplication.count({ where }),
+    ]);
+    const items: JoinApplicationSummary[] = records.map((record) => ({
+      ...toView(record),
+      ticketNo: record.ticketNo,
+      recruitmentCycle: record.recruitmentCycle,
+      realName: record.realName,
+      qqMasked: maskQq(record.qqNormalized),
+      phoneMasked: maskPhone(record.phoneNormalized),
+      submittedAt: record.submittedAt.toISOString(),
+    }));
+    return {
+      items,
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+    };
+  }
+
+  async get(applicationId: string, actor: AuthorizedActor): Promise<JoinApplicationDetail> {
+    requirePermission(actor, "join:read");
+    const record = await getDb().joinApplication.findUnique({
+      where: { id: applicationId },
+      include: { reviews: { orderBy: { createdAt: "desc" } } },
+    });
+    if (!record || record.deletedAt) throw new AppError("RESOURCE_NOT_FOUND", "报名记录不存在");
+    return {
+      ...toView(record),
+      ticketNo: record.ticketNo,
+      recruitmentCycle: record.recruitmentCycle,
+      realName: record.realName,
+      qq: record.qqNormalized,
+      phone: record.phoneNormalized,
+      selfIntroduction: record.selfIntroduction,
+      preferredDirection: record.preferredDirection,
+      applicantRemark: record.applicantRemark,
+      submittedAt: record.submittedAt.toISOString(),
+      reviews: record.reviews.map((review) => ({
+        id: review.id,
+        result: review.result,
+        interviewedAt: review.interviewedAt.toISOString(),
+        internalNote: review.internalNote,
+      })),
+    };
+  }
+
   async submit(
     input: SubmitJoinApplicationInput,
     context: PublicRequestContext,
@@ -141,7 +216,7 @@ export class JoinApplicationService implements JoinApplicationServiceContract {
         actor,
         actorType: actor.actorType,
         actorUserId: actor.userId,
-        action: "join.application.reviewed",
+        action: "join.review.created",
         targetType: "JoinApplication",
         targetId: application.id,
         result: "SUCCESS",
@@ -151,14 +226,19 @@ export class JoinApplicationService implements JoinApplicationServiceContract {
       return updated;
     });
 
+    let initializationSecret: string | undefined;
     if (input.result === "PASSED" && prepared.provisionStatus !== "SUCCEEDED") {
       const provision = await getDb().accountProvision.findUniqueOrThrow({
         where: { sourceType_sourceId: { sourceType: "JOIN_APPLICATION", sourceId: prepared.id } },
       });
-      await accountProvisionService.provisionFromApplication(prepared.id, provision.idempotencyKey);
+      const result = await accountProvisionService.provisionFromApplication(
+        prepared.id,
+        provision.idempotencyKey,
+      );
+      initializationSecret = result.initializationSecret;
     }
     const final = await getDb().joinApplication.findUniqueOrThrow({ where: { id: prepared.id } });
-    return toView(final);
+    return { ...toView(final), ...(initializationSecret ? { initializationSecret } : {}) };
   }
 
   async retryProvision(applicationId: string, actor: AuthorizedActor): Promise<ProvisionView> {
@@ -169,6 +249,33 @@ export class JoinApplicationService implements JoinApplicationServiceContract {
     if (!provision || provision.status !== "FAILED") {
       throw new AppError("STATE_TRANSITION_INVALID", "只有失败的发放任务可以重试");
     }
+    const result = await accountProvisionService.provisionFromApplication(
+      applicationId,
+      provision.idempotencyKey,
+    );
+    await inSerializableTransaction((tx) =>
+      appendAuditLog(tx, {
+        actor,
+        actorType: "USER",
+        actorUserId: actor.userId,
+        action: "account.provision.retried",
+        targetType: "AccountProvision",
+        targetId: provision.id,
+        result: "SUCCESS",
+        after: { status: result.status, attemptCount: result.attemptCount },
+      }),
+    );
+    return result;
+  }
+
+  async provision(applicationId: string, actor: AuthorizedActor): Promise<ProvisionView> {
+    requirePermission(actor, "member:provision");
+    const provision = await getDb().accountProvision.findUnique({
+      where: { sourceType_sourceId: { sourceType: "JOIN_APPLICATION", sourceId: applicationId } },
+    });
+    if (!provision) throw new AppError("RESOURCE_NOT_FOUND", "账号发放任务不存在");
+    if (provision.status === "FAILED")
+      throw new AppError("STATE_TRANSITION_INVALID", "失败任务请使用重试接口");
     return accountProvisionService.provisionFromApplication(
       applicationId,
       provision.idempotencyKey,
@@ -191,6 +298,25 @@ function validateSubmission(input: SubmitJoinApplicationInput): void {
   if (Object.keys(fieldErrors).length > 0) {
     throw new AppError("VALIDATION_FAILED", "报名信息未通过校验", { fieldErrors });
   }
+}
+
+function parseFilterDate(value: string | undefined, label: string): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) throw new AppError("VALIDATION_FAILED", `${label}格式无效`);
+  return parsed;
+}
+
+function buildSearch(query: string | undefined): Prisma.JoinApplicationWhereInput[] | undefined {
+  const value = query?.trim();
+  if (!value) return undefined;
+  const normalizedDigits = value.replace(/\D/g, "");
+  return [
+    { ticketNo: { contains: value } },
+    { realName: { contains: value } },
+    ...(/^\d{5,11}$/.test(normalizedDigits) ? [{ qqNormalized: normalizedDigits }] : []),
+    ...(/^1[3-9]\d{9}$/.test(normalizedDigits) ? [{ phoneNormalized: normalizedDigits }] : []),
+  ];
 }
 
 async function findDuplicate(cycle: string, qq: string, phone: string) {

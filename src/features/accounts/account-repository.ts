@@ -161,3 +161,25 @@ export async function setInitialPassword(
   });
   return true;
 }
+
+export async function setRegistrationPassword(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  plainPassword: string,
+): Promise<void> {
+  const existing = await tx.passwordCredential.findUnique({ where: { userId } });
+  if (existing) {
+    throw new AppError("ACCOUNT_IDENTITY_CONFLICT", "该身份已存在账号凭据，需要管理员处理");
+  }
+  const now = new Date();
+  await tx.passwordCredential.create({
+    data: {
+      userId,
+      passwordHash: await hashPassword(plainPassword),
+      mustChangePassword: false,
+      passwordChangedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
+}

@@ -11,7 +11,7 @@
 
 分页默认 `page=1&pageSize=20`，`pageSize` 范围为 1–100。
 
-## M0 已接线端点
+## 已接线端点
 
 ### `GET /api/v1/health`
 
@@ -24,13 +24,25 @@
 `RECRUITMENT_CYCLE` 配置，不接受客户端指定。
 
 首次创建返回 201；同一批次相同规范化 QQ 或手机号的重复有效提交返回原回执和 200，
-`data.duplicate=true`。该公开入口包含单实例 M0 限流；多实例生产部署前须接入共享限流存储。
+`data.duplicate=true`。该公开入口保留独立的公开报名限流。
 
-## 已冻结、后续里程碑接线的端点
+### 认证与当前用户
+
+- `POST /api/v1/auth/login`：QQ + 密码登录并设置数据库 Session Cookie。
+- `POST /api/v1/auth/logout`：撤销当前 Session 并清除 Cookie。
+- `POST /api/v1/auth/password/change`：验证当前密码、修改密码、撤销其他 Session 并轮换当前 Session。
+- `GET /api/v1/me`：返回当前 User、Role、Permission、MemberProfile 状态与首次改密标记。
+
+管理员初始密码登录后，除 `/me`、改密和登出外均返回 `PASSWORD_CHANGE_REQUIRED`。所有使用
+Cookie 的写接口校验 `Origin` 与 `Host` 同源。Cookie 名为 `pc_hospital_session`，使用
+HttpOnly、SameSite=Lax、Path=/，生产环境启用 Secure。
+
+### 招募、邀请码与成员核心 API
 
 - `GET /api/v1/admin/join-applications`
 - `GET /api/v1/admin/join-applications/:id`
 - `POST /api/v1/admin/join-applications/:id/reviews`
+- `POST /api/v1/admin/join-applications/:id/provision`
 - `POST /api/v1/admin/join-applications/:id/provision/retry`
 - `POST /api/v1/admin/invite-codes`
 - `GET /api/v1/admin/invite-codes`
@@ -38,9 +50,17 @@
 - `POST /api/v1/admin/invite-codes/:id/revoke`
 - `POST /api/v1/member-registrations/invite`
 - `GET /api/v1/me`
+- `POST /api/v1/admin/members`
+- `POST /api/v1/admin/members/:id/disable`
+- `POST /api/v1/admin/members/:id/enable`
+- `POST /api/v1/admin/members/:id/password-reset`
+
+报名列表接受 `page`、`pageSize`、`status`、`provisionStatus`、`submittedFrom`、
+`submittedTo` 与 `query`；列表只返回脱敏 QQ/手机号，完整联系方式、内部备注和审核记录只在
+管理员详情接口返回。邀请码注册要求密码确认，并与报名入口一样执行公开写限流。
 
 这些端点的输入/输出 Service 契约位于 `src/types/contracts.ts`。管理员路径不是权限边界；
-Route Handler 必须先用 `authorizeUser` 从数据库账号状态和有效 UserRole 构造 actor，Service 再
+Route Handler 必须从数据库 Session、账号状态和有效 UserRole 构造 actor，Service 再
 调用 `requirePermission`；不得信任客户端传入的角色或权限。
 
 ## 稳定错误码

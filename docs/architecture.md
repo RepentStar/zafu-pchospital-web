@@ -82,7 +82,9 @@
 │   ├── features/              # 按领域组织 Service / Repository
 │   │   ├── recruitment/       # JoinApplication
 │   │   ├── invitations/       # InviteCode 与原子兑换
-│   │   └── accounts/          # AccountProvision
+│   │   ├── accounts/          # AccountProvision
+│   │   ├── auth/              # 登录、数据库 Session、改密与限流
+│   │   └── members/           # 成员直建、启停与密码重置
 │   ├── types/                 # 公共 Enum / API / Service Contract 唯一事实来源
 │   │
 │   └── data/

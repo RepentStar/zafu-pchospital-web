@@ -9,6 +9,7 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { SectionTitle } from "@/components/ui/SectionTitle";
 import { joinSections, joinSignup, joinSignupFields, joinSignupQr } from "@/config/join";
 import { normalizeMemberSignup, submitMemberSignup } from "@/lib/member-signup";
+import type { MemberSignupReceipt } from "@/lib/member-signup";
 import { pad2, revealIndex } from "@/lib/utils";
 
 /**
@@ -22,7 +23,7 @@ import { pad2, revealIndex } from "@/lib/utils";
  *    约束不通过时浏览器根本不会触发 submit，页面因此不需要第二套 JS 校验，
  *    也不会自造一套错误提示样式。
  * 2. 提交逻辑只有 submitMemberSignup 一个入口（src/lib/member-signup.ts）。
- *    后端接入前它返回本地回执，页面不需要知道后端是否存在。
+ *    它调用同源 API，并统一处理服务端回执与错误信封。
  * 3. 提交完成后才渲染招新群二维码 ——「填写完成后进行显示」。
  *    这一块不能包 Reveal：SiteEffects 只在挂载时收集一次 .reveal，
  *    后插入的 .reveal 永远不会拿到 .is-in，会一直停在 opacity: 0。
@@ -38,6 +39,7 @@ type SignupStatus = "idle" | "submitting" | "done";
 export function MemberSignup() {
   const [status, setStatus] = useState<SignupStatus>("idle");
   const [problem, setProblem] = useState("");
+  const [receipt, setReceipt] = useState<MemberSignupReceipt | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const done = status === "done";
 
@@ -52,6 +54,7 @@ export function MemberSignup() {
     const result = await submitMemberSignup(normalizeMemberSignup(new FormData(form)));
 
     if (result.ok) {
+      setReceipt(result);
       setStatus("done");
       return;
     }
@@ -63,6 +66,7 @@ export function MemberSignup() {
   const handleReset = () => {
     formRef.current?.reset();
     setProblem("");
+    setReceipt(null);
     setStatus("idle");
   };
 
@@ -84,9 +88,11 @@ export function MemberSignup() {
               <h3 className="signup__done-title">{joinSignup.done.title}</h3>
               <p className="signup__done-note">{joinSignup.done.note}</p>
               <p className="signup__done-note">
-                {joinSignup.done.pending}
-                <span className="todo">{joinSignup.done.pendingBadge}</span>
+                {joinSignup.done.ticketLabel}：{receipt?.ticket}
               </p>
+              {receipt?.duplicate ? (
+                <p className="signup__done-note">{joinSignup.done.duplicate}</p>
+              ) : null}
               <Button variant="ghost" onClick={handleReset}>
                 {joinSignup.done.reset}
               </Button>

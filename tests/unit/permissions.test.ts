@@ -7,6 +7,8 @@ import { permissionsForRoles, requirePermission } from "../../src/lib/auth/permi
 test("管理员与成员权限边界固定", () => {
   assert.equal(permissionsForRoles(["MEMBER"]).includes("join:read"), false);
   assert.equal(permissionsForRoles(["ADMIN"]).includes("join:review"), true);
+  assert.equal(permissionsForRoles(["MEMBER"]).includes("member:manage"), false);
+  assert.equal(permissionsForRoles(["ADMIN"]).includes("member:manage"), true);
 });
 
 test("未登录、禁用账号与普通成员均不能读取报名", () => {
