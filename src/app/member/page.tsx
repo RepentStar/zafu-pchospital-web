@@ -6,6 +6,7 @@ import { authService } from "@/features/auth/auth-service";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/request";
 import { PageHead } from "@/components/layout/PageHead";
 import { Section } from "@/components/ui/Section";
+import { Button } from "@/components/ui/Button";
 export const metadata: Metadata = { title: "成员中心" };
 export default async function MemberPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value ?? "";
@@ -30,6 +31,11 @@ export default async function MemberPage() {
           成员信息
         </h2>
         <MemberPanel name={principal.displayName ?? "成员"} roles={principal.roles} />
+        <div className="mt-s-6">
+          <Button href="/member/repairs" variant="solid">
+            进入维修记录
+          </Button>
+        </div>
       </Section>
     </>
   );

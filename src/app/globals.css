@@ -498,12 +498,7 @@ html[data-theme="black-yellow"] {
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    background: linear-gradient(
-      180deg,
-      transparent 0%,
-      var(--deco-scan) 50%,
-      transparent 100%
-    );
+    background: linear-gradient(180deg, transparent 0%, var(--deco-scan) 50%, transparent 100%);
     background-size: 100% 340px;
     opacity: 0.75;
   }
@@ -2114,6 +2109,393 @@ html[data-theme="black-yellow"] {
   .signup__status--alert {
     flex-basis: 100%;
     color: var(--accent-deep);
+  }
+
+  /* ---------------------------------------------------- 维修记录工作台
+     成员需要快速查找和补录维修记录，因此这里采用紧凑页头、渐进筛选与单列数据表。
+     窄屏仍保留同一信息顺序，仅把表格行重排为可点击的纵向记录，不复制第二套内容。 */
+  .repair-workspace {
+    padding-block: clamp(5.75rem, 10vh, 7rem) var(--s-8);
+  }
+  .repair-workspace__content {
+    display: grid;
+    gap: var(--s-5);
+  }
+  .repair-workspace__header {
+    display: grid;
+    gap: var(--s-4);
+    align-items: end;
+    padding-bottom: var(--s-5);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .repair-workspace__header .eyebrow {
+    margin: 0 0 var(--s-2);
+  }
+  .repair-workspace__title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s-2) var(--s-4);
+  }
+  .repair-workspace__title-row h1 {
+    margin: 0;
+    font-size: clamp(2rem, 4vw, 3.25rem);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+  }
+  .repair-workspace__total {
+    font-family: var(--font-latin);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .repair-workspace__lead {
+    max-width: 64ch;
+    margin: var(--s-2) 0 0;
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--ink-3);
+  }
+  .repair-workspace__header > .btn {
+    justify-self: start;
+  }
+
+  .repair-quick-filters {
+    display: flex;
+    gap: var(--s-2);
+    padding-bottom: var(--s-1);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .repair-quick-filters::-webkit-scrollbar {
+    display: none;
+  }
+  .repair-quick-filter.btn {
+    flex: none;
+    min-height: 38px;
+    padding: 0.55rem 0.8rem;
+    font-size: var(--t-xs);
+    letter-spacing: 0.02em;
+  }
+  .repair-quick-filter__count {
+    min-width: 1.3rem;
+    padding-left: var(--s-2);
+    border-left: 1px solid currentColor;
+    text-align: right;
+    font-family: var(--font-latin);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.72;
+  }
+
+  .repair-filters {
+    display: grid;
+    gap: var(--s-4);
+    padding: var(--s-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-mid);
+    background: var(--surface-1);
+  }
+  .repair-filters__primary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-3);
+    align-items: center;
+  }
+  .repair-filter--search {
+    grid-column: 1 / -1;
+  }
+  .repair-filter {
+    min-width: 0;
+  }
+  .repair-filter .field__input {
+    background: var(--bg);
+  }
+  .repair-filters__more.btn {
+    white-space: nowrap;
+  }
+  .repair-filters__advanced {
+    display: grid;
+    gap: var(--s-4);
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--line-soft);
+  }
+  .repair-filters__checks {
+    display: grid;
+    align-content: end;
+    gap: var(--s-3);
+    min-height: 46px;
+  }
+  .repair-filters__checks label {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    font-size: 0.9375rem;
+    color: var(--ink-2);
+  }
+
+  .repair-list-status:empty {
+    display: none;
+  }
+  .repair-list-status > p {
+    margin: 0;
+    font-size: var(--t-sm);
+    color: var(--ink-3);
+  }
+  .repair-list-status .notice {
+    align-items: center;
+  }
+  .repair-list-status .notice p {
+    margin: 0;
+  }
+
+  .repair-table-wrap {
+    border: 1px solid var(--line);
+    border-radius: var(--r-mid);
+    background: var(--surface-1);
+    overflow: hidden;
+  }
+  .repair-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .repair-table th {
+    padding: 0.75rem var(--s-3);
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+    text-align: left;
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--ink-3);
+  }
+  .repair-table td {
+    padding: 0.85rem var(--s-3);
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: middle;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+  .repair-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .repair-table tbody tr {
+    transition: background var(--d-fast) var(--ease-quart);
+  }
+  .repair-table tbody tr:hover {
+    background: var(--surface-2);
+  }
+  .repair-table th:nth-child(1) {
+    width: 7%;
+  }
+  .repair-table th:nth-child(2) {
+    width: 12%;
+  }
+  .repair-table th:nth-child(3) {
+    width: 35%;
+  }
+  .repair-table th:nth-child(4) {
+    width: 13%;
+  }
+  .repair-table th:nth-child(5),
+  .repair-table th:nth-child(6) {
+    width: 11%;
+  }
+  .repair-table th:nth-child(7) {
+    width: 8%;
+  }
+  .repair-table__date {
+    font-family: var(--font-latin);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .repair-table__content a {
+    display: block;
+    overflow: hidden;
+    color: var(--ink);
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .repair-table__content a:hover,
+  .repair-table__content a:focus-visible,
+  .repair-table__action a:hover,
+  .repair-table__action a:focus-visible {
+    color: var(--accent-deep);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+  .repair-table__flags {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: var(--t-xs);
+    color: var(--accent-deep);
+  }
+  .repair-table__muted {
+    color: var(--ink-4);
+  }
+  .repair-table__action {
+    text-align: right;
+  }
+  .repair-table__action a {
+    color: var(--ink-2);
+    font-weight: 650;
+  }
+  .repair-table__empty {
+    margin: 0;
+    padding: var(--s-7) var(--s-4);
+    text-align: center;
+    color: var(--ink-3);
+  }
+
+  .repair-tag {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.7rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--r-full);
+    background: var(--bg);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .repair-tag--approved {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--bg);
+  }
+  .repair-tag--pending,
+  .repair-tag--rejected {
+    border-color: var(--accent-line);
+    background: var(--accent-wash);
+    color: var(--accent-deep);
+  }
+  .repair-tag--draft,
+  .repair-tag--result {
+    background: var(--surface-2);
+    color: var(--ink-2);
+  }
+
+  .repair-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--s-3);
+  }
+  .repair-pagination > span {
+    min-width: 4rem;
+    text-align: center;
+    font-family: var(--font-latin);
+    font-size: var(--t-sm);
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (min-width: 760px) {
+    .repair-workspace__header {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .repair-workspace__header > .btn {
+      justify-self: end;
+    }
+    .repair-filters__primary {
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    }
+    .repair-filter--search {
+      grid-column: span 2;
+    }
+    .repair-filters__advanced {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1100px) {
+    .repair-filters__primary {
+      grid-template-columns:
+        minmax(15rem, 2fr) minmax(7.5rem, 0.85fr) minmax(7.5rem, 0.85fr)
+        minmax(8rem, 0.9fr) auto auto auto;
+    }
+    .repair-filter--search {
+      grid-column: auto;
+    }
+  }
+
+  @media (max-width: 1099px) {
+    .repair-table,
+    .repair-table tbody {
+      display: block;
+    }
+    .repair-table thead {
+      display: none;
+    }
+    .repair-table tbody tr {
+      display: grid;
+      padding: var(--s-4);
+      border-bottom: 1px solid var(--line);
+    }
+    .repair-table tbody tr:last-child {
+      border-bottom: 0;
+    }
+    .repair-table td {
+      display: grid;
+      grid-template-columns: 5.5rem minmax(0, 1fr);
+      gap: var(--s-3);
+      padding: 0.45rem 0;
+      border: 0;
+      text-align: left;
+    }
+    .repair-table td::before {
+      content: attr(data-label);
+      font-size: var(--t-xs);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--ink-4);
+    }
+    .repair-table__content a {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+  }
+
+  @media (min-width: 760px) and (max-width: 1099px) {
+    .repair-table tbody tr {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 var(--s-6);
+    }
+    .repair-table__content {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 759px) {
+    .repair-workspace {
+      padding-bottom: var(--s-7);
+    }
+    .repair-workspace__header > .btn {
+      width: 100%;
+      justify-content: center;
+    }
+    .repair-filters__primary > .btn:not(.btn--ghost) {
+      width: 100%;
+      justify-content: center;
+    }
+    .repair-filters__primary > .btn[type="submit"] {
+      grid-column: 1 / -1;
+    }
+    .repair-pagination {
+      justify-content: space-between;
+    }
+    .repair-pagination .btn {
+      padding-inline: 0.85rem;
+    }
   }
 
   /* 右栏：提交前是登记说明，提交后换成招新群二维码 */

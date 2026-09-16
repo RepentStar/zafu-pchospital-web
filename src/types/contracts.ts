@@ -26,6 +26,21 @@ export const InviteCodeEffectiveStatus = [
   "EXHAUSTED",
 ] as const;
 export const AuditActorType = ["USER", "SYSTEM"] as const;
+export const RepairStatus = ["DRAFT", "PENDING", "APPROVED", "REJECTED"] as const;
+export const RepairResult = ["COMPLETED", "NOT_COMPLETED"] as const;
+export const RepairReviewDecision = ["APPROVED", "REJECTED"] as const;
+export const RepairTimelineEventType = [
+  "CREATED",
+  "UPDATED",
+  "PHOTO_ADDED",
+  "PHOTO_REMOVED",
+  "SUBMITTED",
+  "RESUBMITTED",
+  "APPROVED",
+  "REJECTED",
+  "DELETED",
+  "FLAG_CHANGED",
+] as const;
 
 type ValueOf<T extends readonly string[]> = T[number];
 
@@ -40,6 +55,10 @@ export type ProvisionSourceType = ValueOf<typeof ProvisionSourceType>;
 export type InviteCodeStoredStatus = ValueOf<typeof InviteCodeStoredStatus>;
 export type InviteCodeEffectiveStatus = ValueOf<typeof InviteCodeEffectiveStatus>;
 export type AuditActorType = ValueOf<typeof AuditActorType>;
+export type RepairStatus = ValueOf<typeof RepairStatus>;
+export type RepairResult = ValueOf<typeof RepairResult>;
+export type RepairReviewDecision = ValueOf<typeof RepairReviewDecision>;
+export type RepairTimelineEventType = ValueOf<typeof RepairTimelineEventType>;
 
 export const Permission = [
   "join:submit",
@@ -52,6 +71,14 @@ export const Permission = [
   "invite:revoke",
   "invite:redeem",
   "audit:read",
+  "repair:create",
+  "repair:read",
+  "repair:update",
+  "repair:submit",
+  "repair:review",
+  "repair:delete",
+  "repair:flag",
+  "repair:category:manage",
 ] as const;
 export type Permission = ValueOf<typeof Permission>;
 
@@ -244,6 +271,104 @@ export type MemberView = {
 };
 export type MemberMutationResult = { member: MemberView; initializationSecret?: string };
 
+export type RepairPhotoView = {
+  id: string;
+  contentUrl: string;
+  originalName: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  sortOrder: number;
+  createdAt: string;
+};
+export type RepairCategoryView = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  isActive: boolean;
+};
+export type RepairMemberOption = { id: string; name: string };
+export type RepairTimelineView = {
+  id: string;
+  eventType: RepairTimelineEventType;
+  summary: unknown;
+  actorName: string | null;
+  createdAt: string;
+};
+export type RepairReviewView = {
+  id: string;
+  decision: RepairReviewDecision;
+  note: string | null;
+  reviewerName: string | null;
+  createdAt: string;
+};
+export type RepairView = {
+  id: string;
+  member: { id: string; name: string };
+  repairDate: string | null;
+  durationMinutes: number | null;
+  category: RepairCategoryView | null;
+  content: string | null;
+  result: RepairResult | null;
+  remark: string | null;
+  status: RepairStatus;
+  isDifficult: boolean;
+  isTypical: boolean;
+  version: number;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  photos: RepairPhotoView[];
+};
+export type RepairDetailView = RepairView & {
+  reviews: RepairReviewView[];
+  timeline: RepairTimelineView[];
+  canEdit: boolean;
+  canReview: boolean;
+};
+export type RepairDraftFields = {
+  repairDate?: string | null;
+  durationMinutes?: number | null;
+  categoryId?: string | null;
+  content?: string | null;
+  result?: RepairResult | null;
+  remark?: string | null;
+};
+export type CreateRepairDraftInput = RepairDraftFields & { idempotencyKey: string };
+export type UpdateRepairInput = RepairDraftFields & { version: number };
+export type SubmitRepairInput = { version: number; idempotencyKey: string };
+export type ReviewRepairInput = {
+  decision: RepairReviewDecision;
+  note?: string;
+  idempotencyKey: string;
+};
+export type RepairFlagsInput = { isDifficult: boolean; isTypical: boolean };
+export type RepairListInput = PaginationInput & {
+  memberId?: string;
+  categoryId?: string;
+  status?: RepairStatus;
+  result?: RepairResult;
+  repairDateFrom?: string;
+  repairDateTo?: string;
+  isDifficult?: boolean;
+  isTypical?: boolean;
+  query?: string;
+};
+export type RepairListResult = { items: RepairView[]; pagination: PaginationMeta };
+export type CreateRepairCategoryInput = {
+  code: string;
+  name: string;
+  description?: string | null;
+  sortOrder?: number;
+};
+export type UpdateRepairCategoryInput = {
+  name?: string;
+  description?: string | null;
+  sortOrder?: number;
+};
+
 export interface JoinApplicationServiceContract {
   list(
     input: JoinApplicationListInput,
@@ -273,4 +398,18 @@ export interface InviteCodeServiceContract {
 export interface AccountProvisionServiceContract {
   provisionFromApplication(applicationId: string, idempotencyKey: string): Promise<ProvisionResult>;
   provisionFromInvite(redemptionId: string, idempotencyKey: string): Promise<ProvisionResult>;
+}
+
+export interface RepairServiceContract {
+  createDraft(input: CreateRepairDraftInput, actor: AuthorizedActor): Promise<RepairView>;
+  update(recordId: string, input: UpdateRepairInput, actor: AuthorizedActor): Promise<RepairView>;
+  submit(recordId: string, input: SubmitRepairInput, actor: AuthorizedActor): Promise<RepairView>;
+  softDelete(recordId: string, reason: string, actor: AuthorizedActor): Promise<void>;
+}
+export interface RepairReviewServiceContract {
+  review(recordId: string, input: ReviewRepairInput, actor: AuthorizedActor): Promise<RepairView>;
+}
+export interface RepairQueryServiceContract {
+  list(input: RepairListInput, actor: AuthorizedActor): Promise<RepairListResult>;
+  getById(recordId: string, actor: AuthorizedActor): Promise<RepairDetailView>;
 }

@@ -73,3 +73,30 @@ Route Handler 必须从数据库 Session、账号状态和有效 UserRole 构造
 修改公共 Type、Enum、错误码、API 信封或已记录端点时，必须先搜索所有生产者与消费者并在
 PR 中记录影响范围。不强制单独评审；但若影响其他模块，必须在同一变更中同步 Route、Service、
 客户端调用、数据迁移（如有）、Contract 测试和文档，不能保留新旧两套不兼容语义。
+
+## M2 维修记录
+
+成员端：
+
+- `GET/POST /api/v1/repairs`
+- `GET/PATCH/DELETE /api/v1/repairs/:id`（DELETE 仅管理员）
+- `POST /api/v1/repairs/:id/submit`
+- `POST /api/v1/repairs/:id/photos`
+- `PATCH/DELETE /api/v1/repairs/:id/photos/:photoId`
+- `GET /api/v1/repair-photos/:photoId/content`
+- `GET /api/v1/repair-categories`
+- `GET /api/v1/repair-members`
+
+管理端核心 API（M6 消费，不在 M2 建完整管理页面）：
+
+- `GET /api/v1/admin/repairs`、`GET /api/v1/admin/repairs/:id`
+- `POST /api/v1/admin/repairs/:id/reviews`
+- `PATCH /api/v1/admin/repairs/:id/flags`
+- `POST /api/v1/admin/repair-categories`
+- `PATCH /api/v1/admin/repair-categories/:id`
+- `POST /api/v1/admin/repair-categories/:id/deactivate`
+
+创建草稿、提交和审核使用 `Idempotency-Key`。更新草稿携带 `version`；过期版本返回
+`REPAIR_VERSION_CONFLICT`。列表支持分页、成员、分类、状态、结果、日期、疑难、典型和关键词
+筛选；普通成员只能看到本人全部状态与他人的 `APPROVED` 记录。照片内容接口要求有效 Session，
+并返回私有缓存、`nosniff`、正确 MIME 与长度。

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { inviteCodeService } from "../../src/features/invitations/invite-code-service";
 import { joinApplicationService } from "../../src/features/recruitment/join-application-service";
@@ -10,14 +13,32 @@ import { authService } from "../../src/features/auth/auth-service";
 import { memberService } from "../../src/features/members/member-service";
 import { AppError } from "../../src/lib/api/errors";
 import { authenticateRequest, SESSION_COOKIE_NAME } from "../../src/lib/auth/request";
+import { repairService } from "../../src/features/repairs/repair-service";
+import {
+  createRepairPhotoService,
+  repairPhotoService,
+} from "../../src/features/repairs/repair-photo-service";
+import {
+  repairQueryService,
+  listApprovedRepairsForAnalytics,
+} from "../../src/features/repairs/repair-query-service";
+import { repairReviewService } from "../../src/features/repairs/repair-review-service";
 
 const enabled = process.env.RUN_DB_TESTS === "1" || process.env.npm_lifecycle_event === "test:db";
 const dbTest = enabled ? test : test.skip;
 const adminId = "10000000-0000-4000-8000-000000000001";
+let uploadTestRoot = "";
 
 before(async () => {
   if (!enabled) return;
+  uploadTestRoot = await mkdtemp(join(tmpdir(), "pc-hospital-m2-"));
+  process.env.UPLOAD_PATH = uploadTestRoot;
   const db = getDb();
+  await db.repairTimelineEvent.deleteMany();
+  await db.repairReview.deleteMany();
+  await db.repairPhoto.deleteMany();
+  await db.repairRecord.deleteMany();
+  await db.repairCategory.deleteMany();
   await db.authSession.deleteMany();
   await db.loginThrottle.deleteMany();
   await db.auditLog.deleteMany();
@@ -40,10 +61,32 @@ before(async () => {
       updatedAt: new Date(),
     },
   });
+  await db.memberProfile.create({
+    data: {
+      id: "10000000-0000-4000-8000-000000000002",
+      userId: adminId,
+      realName: "M0 Admin",
+      status: "ACTIVE",
+      joinedAt: new Date(),
+      createdAt: new Date(),
+    },
+  });
+  await db.repairCategory.create({
+    data: {
+      id: "10000000-0000-4000-8000-000000000003",
+      code: "M2_TEST",
+      name: "M2 测试分类",
+      sortOrder: 1,
+      createdAt: new Date(),
+    },
+  });
 });
 
 after(async () => {
-  if (enabled) await disconnectDb();
+  if (enabled) {
+    await disconnectDb();
+    if (uploadTestRoot) await rm(uploadTestRoot, { recursive: true, force: true });
+  }
 });
 
 const adminActor = {
@@ -394,5 +437,207 @@ dbTest("普通成员不能调用管理员成员 Service", async () => {
         },
       ),
     (error) => error instanceof AppError && error.code === "FORBIDDEN",
+  );
+});
+
+dbTest("M2 草稿、照片、提交、审核、可见性与统计形成闭环", async () => {
+  const first = await memberService.create(
+    {
+      realName: "维修成员甲",
+      qq: `6${String(Date.now()).slice(-9)}`,
+      phone: `131${String(Date.now()).slice(-8)}`,
+      idempotencyKey: randomUUID(),
+    },
+    adminActor,
+  );
+  const second = await memberService.create(
+    {
+      realName: "维修成员乙",
+      qq: `7${String(Date.now() + 1).slice(-9)}`,
+      phone: `130${String(Date.now() + 1).slice(-8)}`,
+      idempotencyKey: randomUUID(),
+    },
+    adminActor,
+  );
+  const actor = (userId: string, requestId: string) => ({
+    actorType: "USER" as const,
+    userId,
+    userStatus: "ACTIVE" as const,
+    permissions: permissionsForRoles(["MEMBER"]),
+    requestId,
+  });
+  const owner = actor(first.member.userId, "req_m2_owner");
+  const other = actor(second.member.userId, "req_m2_other");
+  const key = randomUUID();
+  const draft = await repairService.createDraft({ idempotencyKey: key }, owner);
+  assert.equal((await repairService.createDraft({ idempotencyKey: key }, owner)).id, draft.id);
+  const category = await getDb().repairCategory.findUniqueOrThrow({ where: { code: "M2_TEST" } });
+  const updated = await repairService.update(
+    draft.id,
+    {
+      version: draft.version,
+      repairDate: new Date().toISOString().slice(0, 10),
+      durationMinutes: 90,
+      categoryId: category.id,
+      content: "完成故障检查、清理并复测，设备恢复正常。",
+      result: "COMPLETED",
+      remark: "集成测试记录",
+    },
+    owner,
+  );
+  await assert.rejects(
+    () =>
+      repairService.update(
+        draft.id,
+        { version: draft.version, content: "过期版本不应覆盖" },
+        owner,
+      ),
+    (error) => error instanceof AppError && error.code === "REPAIR_VERSION_CONFLICT",
+  );
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+  const uploaded = await repairPhotoService.upload(
+    draft.id,
+    [new File([png], "../../unsafe.png", { type: "image/png" })],
+    owner,
+  );
+  const submitted = await repairService.submit(
+    draft.id,
+    { version: updated.version, idempotencyKey: randomUUID() },
+    owner,
+  );
+  assert.equal(submitted.status, "PENDING");
+  await assert.rejects(
+    () => repairQueryService.getById(draft.id, other),
+    (error) => error instanceof AppError && error.code === "REPAIR_NOT_FOUND",
+  );
+  await assert.rejects(
+    () => repairPhotoService.open(uploaded[0]!.id, other),
+    (error) => error instanceof AppError && error.code === "REPAIR_NOT_FOUND",
+  );
+  const approved = await repairReviewService.review(
+    draft.id,
+    { decision: "APPROVED", idempotencyKey: randomUUID() },
+    adminActor,
+  );
+  assert.equal(approved.status, "APPROVED");
+  assert.equal((await repairQueryService.getById(draft.id, other)).id, draft.id);
+  assert.equal(
+    (await listApprovedRepairsForAnalytics()).some((row) => row.id === draft.id),
+    true,
+  );
+  await repairService.softDelete(draft.id, "集成测试软删除", adminActor);
+  assert.equal(
+    (await listApprovedRepairsForAnalytics()).some((row) => row.id === draft.id),
+    false,
+  );
+});
+
+dbTest("M2 数据库写入失败会补偿删除已写入的文件", async () => {
+  const created = await memberService.create(
+    {
+      realName: "存储补偿成员",
+      qq: `9${String(Date.now()).slice(-9)}`,
+      phone: `132${String(Date.now()).slice(-8)}`,
+      idempotencyKey: randomUUID(),
+    },
+    adminActor,
+  );
+  const owner = {
+    actorType: "USER" as const,
+    userId: created.member.userId,
+    userStatus: "ACTIVE" as const,
+    permissions: permissionsForRoles(["MEMBER"]),
+    requestId: "req_m2_compensation",
+  };
+  const draft = await repairService.createDraft({ idempotencyKey: randomUUID() }, owner);
+  const deleted: string[] = [];
+  const service = createRepairPhotoService({
+    async put() {
+      return { storageKey: "repairs/fixed-duplicate.png" };
+    },
+    async open() {
+      return new Uint8Array();
+    },
+    async delete(key) {
+      deleted.push(key);
+    },
+  });
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  await assert.rejects(
+    () =>
+      service.upload(
+        draft.id,
+        [
+          new File([png], "a.png", { type: "image/png" }),
+          new File([png], "b.png", { type: "image/png" }),
+        ],
+        owner,
+      ),
+    (error) => error instanceof AppError && error.code === "REPAIR_PHOTO_STORAGE_FAILED",
+  );
+  assert.equal(await getDb().repairPhoto.count({ where: { repairRecordId: draft.id } }), 0);
+  assert.equal(deleted.length, 2);
+});
+
+dbTest("M2 并发审核只有一个结果成功且事务记录一致", async () => {
+  const created = await memberService.create(
+    {
+      realName: "并发审核成员",
+      qq: `8${String(Date.now()).slice(-9)}`,
+      phone: `139${String(Date.now()).slice(-8)}`,
+      idempotencyKey: randomUUID(),
+    },
+    adminActor,
+  );
+  const owner = {
+    actorType: "USER" as const,
+    userId: created.member.userId,
+    userStatus: "ACTIVE" as const,
+    permissions: permissionsForRoles(["MEMBER"]),
+    requestId: "req_m2_concurrent_owner",
+  };
+  const category = await getDb().repairCategory.findUniqueOrThrow({ where: { code: "M2_TEST" } });
+  const draft = await repairService.createDraft(
+    {
+      idempotencyKey: randomUUID(),
+      repairDate: new Date().toISOString().slice(0, 10),
+      durationMinutes: 30,
+      categoryId: category.id,
+      content: "并发审核测试维修内容已满足最小长度。",
+      result: "NOT_COMPLETED",
+    },
+    owner,
+  );
+  const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0, 0, 0]);
+  await repairPhotoService.upload(
+    draft.id,
+    [new File([jpeg], "case.jpg", { type: "image/jpeg" })],
+    owner,
+  );
+  const pending = await repairService.submit(
+    draft.id,
+    { version: draft.version, idempotencyKey: randomUUID() },
+    owner,
+  );
+  assert.equal(pending.status, "PENDING");
+  const settled = await Promise.allSettled([
+    repairReviewService.review(
+      draft.id,
+      { decision: "APPROVED", idempotencyKey: randomUUID() },
+      adminActor,
+    ),
+    repairReviewService.review(
+      draft.id,
+      { decision: "REJECTED", note: "资料需要补充", idempotencyKey: randomUUID() },
+      { ...adminActor, requestId: "req_m2_review_2" },
+    ),
+  ]);
+  assert.equal(settled.filter((item) => item.status === "fulfilled").length, 1);
+  assert.equal(await getDb().repairReview.count({ where: { repairRecordId: draft.id } }), 1);
+  assert.equal(
+    await getDb().auditLog.count({
+      where: { targetId: draft.id, action: { in: ["repair.approved", "repair.rejected"] } },
+    }),
+    1,
   );
 });

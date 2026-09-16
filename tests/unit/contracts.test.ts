@@ -10,10 +10,15 @@ import { resetServerEnvForTests } from "../../src/lib/env";
 import { assertSameOrigin, sessionCookie } from "../../src/lib/auth/request";
 import { authenticateRequest } from "../../src/lib/auth/request";
 import { submitMemberSignup } from "../../src/lib/member-signup";
-import { JoinApplicationStatus, Permission, RoleCode } from "../../src/types/contracts";
+import {
+  JoinApplicationStatus,
+  Permission,
+  RepairStatus,
+  RoleCode,
+} from "../../src/types/contracts";
 
 test("公共枚举不包含重复值", () => {
-  for (const values of [JoinApplicationStatus, Permission, RoleCode]) {
+  for (const values of [JoinApplicationStatus, Permission, RepairStatus, RoleCode]) {
     assert.equal(new Set(values).size, values.length);
   }
 });
