@@ -103,6 +103,8 @@ jobs:
           cache: pnpm
 
       - name: 安装依赖
+        # minimumReleaseAge 在 pnpm-workspace.yaml 中统一设为 0，确保后续 lint/build
+        # 等每条 pnpm 命令都不会再次启用新包等待期。
         run: pnpm install --frozen-lockfile
 
       # pnpm lint = ESLint + 主题调色板一致性校验
