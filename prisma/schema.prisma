@@ -31,6 +31,7 @@ model User {
   repairPhotos       RepairPhoto[]           @relation("RepairPhotoUploader")
   repairTimeline     RepairTimelineEvent[]
   repairCategories   RepairCategory[]        @relation("RepairCategoryCreator")
+  skillsCreated      Skill[]                 @relation("SkillCreator")
 
   @@index([status, deletedAt], map: "users_status_deleted_idx")
   @@map("users")
@@ -130,6 +131,7 @@ model MemberProfile {
   nickname      String?                @db.VarChar(64)
   avatarUrl     String?                @map("avatar_url") @db.VarChar(500)
   status        String                 @db.VarChar(32)
+  version       Int                    @default(1) @db.Int
   joinedAt      DateTime               @map("joined_at") @db.DateTime(3)
   createdAt     DateTime               @map("created_at") @db.DateTime(3)
   updatedAt     DateTime               @updatedAt @map("updated_at") @db.DateTime(3)
@@ -138,6 +140,7 @@ model MemberProfile {
   redemptions   InviteCodeRedemption[]
   provisions    AccountProvision[]
   repairRecords RepairRecord[]
+  userSkills    UserSkill[]
 
   @@index([status, deletedAt], map: "member_profiles_status_deleted_idx")
   @@map("member_profiles")
@@ -284,6 +287,43 @@ model RepairCategory {
 
   @@index([isActive, sortOrder], map: "repair_categories_active_sort_idx")
   @@map("repair_categories")
+}
+
+/// M3 技能标签。成员只能关联 isActive = true 且未软删除的标签。
+model Skill {
+  id          String      @id @db.Char(36)
+  code        String      @unique(map: "skills_code_uq") @db.VarChar(64)
+  name        String      @db.VarChar(80)
+  description String?     @db.VarChar(500)
+  sortOrder   Int         @default(0) @map("sort_order")
+  isActive    Boolean     @default(true) @map("is_active")
+  createdBy   String?     @map("created_by") @db.Char(36)
+  createdAt   DateTime    @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt   DateTime?   @map("deleted_at") @db.DateTime(3)
+  creator     User?       @relation("SkillCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  userSkills  UserSkill[]
+
+  @@index([isActive, deletedAt, sortOrder, name], map: "skills_active_deleted_sort_name_idx")
+  @@map("skills")
+}
+
+/// M3 成员技能关联。沿用需求文档命名，但外键指向 MemberProfile，
+/// 不保存 QQ、手机号、姓名或冗余 userId；取消选择走软删除，再次选择复用同一行。
+model UserSkill {
+  id              String        @id @db.Char(36)
+  memberProfileId String        @map("member_profile_id") @db.Char(36)
+  skillId         String        @map("skill_id") @db.Char(36)
+  createdAt       DateTime      @map("created_at") @db.DateTime(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt       DateTime?     @map("deleted_at") @db.DateTime(3)
+  memberProfile   MemberProfile @relation(fields: [memberProfileId], references: [id], onDelete: Restrict)
+  skill           Skill         @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  @@unique([memberProfileId, skillId], map: "user_skills_member_skill_uq")
+  @@index([memberProfileId, deletedAt], map: "user_skills_member_deleted_idx")
+  @@index([skillId, deletedAt], map: "user_skills_skill_deleted_idx")
+  @@map("user_skills")
 }
 
 model RepairRecord {

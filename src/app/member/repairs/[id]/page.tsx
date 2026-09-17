@@ -8,10 +8,10 @@ import {
   repairStatusLabels,
   repairTimelineLabels,
 } from "@/config/repairs";
-import { requireMemberPage } from "@/lib/auth/member-page";
+import { requireActiveMemberPage } from "@/lib/auth/member-page";
 export const metadata: Metadata = { title: "维修记录详情" };
 export default async function RepairDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireMemberPage();
+  await requireActiveMemberPage();
   const { id } = await params;
   return (
     <>

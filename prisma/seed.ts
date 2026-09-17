@@ -57,6 +57,27 @@ async function main(): Promise<void> {
         createdAt: now,
       },
     });
+
+    // M3 技能标签初始 Seed（任务书 §5.4）。
+    // 与分类不同：这里**只补不存在的 code**，绝不覆盖管理员后续修改的名称、
+    // 描述、排序或启用状态，因此 update 分支必须为空对象。
+    const skills = [
+      ["20000000-0000-4000-8000-000000000001", "WINDOWS", "Windows"],
+      ["20000000-0000-4000-8000-000000000002", "HARDWARE", "硬件维修"],
+      ["20000000-0000-4000-8000-000000000003", "NETWORK", "网络排障"],
+      ["20000000-0000-4000-8000-000000000004", "LINUX", "Linux"],
+      ["20000000-0000-4000-8000-000000000005", "LAPTOP_DISASSEMBLY", "笔记本拆装"],
+      ["20000000-0000-4000-8000-000000000006", "SYSTEM_INSTALLATION", "系统安装"],
+      ["20000000-0000-4000-8000-000000000007", "DRIVER", "驱动处理"],
+      ["20000000-0000-4000-8000-000000000008", "STORAGE", "存储与数据迁移"],
+    ] as const;
+    for (const [index, [id, code, name]] of skills.entries()) {
+      await prisma.skill.upsert({
+        where: { code },
+        update: {},
+        create: { id, code, name, sortOrder: (index + 1) * 10, isActive: true, createdAt: now },
+      });
+    }
   } finally {
     await prisma.$disconnect();
   }

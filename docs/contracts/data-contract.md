@@ -74,4 +74,34 @@ Repository / Service 的默认读取必须加 `deletedAt: null`。身份采用�
 - 照片数据库只保存元数据与服务端 `storage_key`，文件不在 `public/` 下；照片访问继承维修记录可见性。
 - 分类使用稳定 `code` 幂等 Seed。停用分类不能用于新提交，但历史引用保留。
 - 默认业务查询排除 `repair_records.deleted_at IS NOT NULL` 和已软删除照片。
-- 后续所有正式统计必须统一使用 `status = APPROVED AND deleted_at IS NULL`，入口为 `listApprovedRepairsForAnalytics()`。
+- 后续所有正式统计必须统一使用 `status = APPROVED AND deleted_at IS NULL`。查询条件的代码事实来源为
+  `approvedRepairWhere()`；M2 分析入口 `listApprovedRepairsForAnalytics()` 与 M3 成员摘要均在其上追加范围条件。
+
+## M3 技能标签契约
+
+- `skills` 用稳定 `code` 幂等 Seed，初始 8 项：`WINDOWS`、`HARDWARE`、`NETWORK`、`LINUX`、
+  `LAPTOP_DISASSEMBLY`、`SYSTEM_INSTALLATION`、`DRIVER`、`STORAGE`。停用用 `is_active = false`，
+  不物理删除，历史引用保留。
+- `user_skills` 是 `member_profiles` 与 `skills` 的多对多关联，**不使用** `users` 作主体 ——
+  成员身份的唯一载体是 `member_profiles`，QQ 绝不出现在关联键上。
+- `user_skills` 唯一约束为 `(member_profile_id, skill_id)`，**取消选择走 `deleted_at` 软删除**，
+  不物理删除行；重新选择恢复同一行，保证历史可追溯且不产生重复记录。
+- 成员选择的技能上限为 12（`MEMBER_SKILL_LIMIT`），服务端为权威校验点。
+- 已停用技能不能新增关联，但既有保留不被静默删除。
+
+## M3 成员资料契约
+
+- 昵称 `nickname` 由成员自助维护，长度上限 64（`MEMBER_NICKNAME_MAX_LENGTH`），
+  拒绝换行与控制字符；留空表示回退展示实名。
+- `member_profiles.version` 是资料与技能共用的乐观锁：昵称更新与技能保存都必须提交当前版本，
+  成功后版本递增；过期版本返回 `MEMBER_PROFILE_VERSION_CONFLICT`。
+- 资料的字段可见性由 `ProfileVisibilityPolicy` 裁剪，分三档：
+
+  | 视图 | 出现场景 | 含 QQ | 含学号/班级 | 含 `userId` |
+  |---|---|---|---|---|
+  | summary | 工作台、列表、公开响应 | 否 | 否 | 否 |
+  | self | 仅 `GET /member/profile` | 是 | 是 | 否 |
+  | internal | 仅 `GET /members/:id/profile` | 是 | 否 | 否 |
+
+  因此 QQ、学号、班级只存在于受保护的单成员详情，绝不进入列表、统计或公开数据。
+- 学生身份标识（学号、班级）当前由管理员维护，M3 不提供自助修改入口。

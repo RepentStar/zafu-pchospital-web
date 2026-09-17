@@ -8,6 +8,11 @@ import { repairDetailInclude, repairRepository } from "./repair-repository";
 import { toRepairDetail, toRepairView } from "./repair-view";
 import type {
   AuthorizedActor,
+  MemberRecentActivity,
+  MemberRecentRepair,
+  MemberRepairSummary,
+  MemberWorkQueue,
+  MetricValue,
   RepairListInput,
   RepairQueryServiceContract,
 } from "@/types/contracts";
@@ -36,9 +41,21 @@ export const repairQueryService: RepairQueryServiceContract = {
   },
 };
 
+/**
+ * 正式维修记录的唯一查询谓词。
+ *
+ * M2 分析入口与 M3 成员摘要都必须从这里组合附加条件，禁止各自重复
+ * `APPROVED AND deletedAt IS NULL`，避免 M5 接入前出现统计口径漂移。
+ */
+export function approvedRepairWhere(
+  scope: Omit<Prisma.RepairRecordWhereInput, "status" | "deletedAt"> = {},
+): Prisma.RepairRecordWhereInput {
+  return { ...scope, status: "APPROVED", deletedAt: null };
+}
+
 export async function listApprovedRepairsForAnalytics(input: { from?: Date; to?: Date } = {}) {
   return getDb().repairRecord.findMany({
-    where: { status: "APPROVED", deletedAt: null, repairDate: { gte: input.from, lte: input.to } },
+    where: approvedRepairWhere({ repairDate: { gte: input.from, lte: input.to } }),
     select: {
       id: true,
       memberProfileId: true,
@@ -64,6 +81,146 @@ export async function listRepairMemberOptions(actor: AuthorizedActor) {
     id: row.id,
     name: row.nickname || row.realName || row.user.displayName || "成员",
   }));
+}
+
+// ---------------------------------------------------------------------------
+// M3 成员维修摘要（任务书 §7）
+//
+// 这里**不重写**「有效维修记录」的定义：统一复用上面已冻结的
+// `APPROVED AND deletedAt IS NULL` 语义，只在其上追加 `memberProfileId` 归属过滤。
+// ---------------------------------------------------------------------------
+
+/** 正式摘要只在唯一正式谓词上追加成员归属与可选日期范围。 */
+function approvedForMember(
+  memberProfileId: string,
+  range?: UtcRange,
+): Prisma.RepairRecordWhereInput {
+  return approvedRepairWhere({
+    memberProfileId,
+    repairDate: range ? { gte: range.startInclusive, lt: range.endExclusive } : undefined,
+  });
+}
+
+type UtcRange = { startInclusive: Date; endExclusive: Date };
+
+/**
+ * 成员维修摘要。`termRange` 为 undefined 表示学期未配置，
+ * 此时 `termApprovedCount` 返回 `{ value: null, status: "UNCONFIGURED" }`，
+ * **绝不回退为 0**。
+ */
+export async function listMemberRepairSummary(
+  memberProfileId: string,
+  options: { monthRange?: UtcRange; termRange?: UtcRange } = {},
+): Promise<MemberRepairSummary> {
+  const db = getDb();
+  const generatedAt = new Date().toISOString();
+
+  const [totalApprovedCount, monthApprovedCount, durationAggregate, termApprovedCount] =
+    await Promise.all([
+      db.repairRecord.count({ where: approvedForMember(memberProfileId) }),
+      options.monthRange
+        ? db.repairRecord.count({ where: approvedForMember(memberProfileId, options.monthRange) })
+        : Promise.resolve(0),
+      db.repairRecord.aggregate({
+        where: approvedForMember(memberProfileId),
+        _sum: { durationMinutes: true },
+      }),
+      options.termRange
+        ? db.repairRecord.count({ where: approvedForMember(memberProfileId, options.termRange) })
+        : Promise.resolve(null),
+    ]);
+
+  return {
+    totalApprovedCount: available(totalApprovedCount),
+    termApprovedCount:
+      termApprovedCount === null
+        ? { value: null, status: "UNCONFIGURED" }
+        : available(termApprovedCount),
+    monthApprovedCount: available(monthApprovedCount),
+    // 时长为空表示该成员尚无已通过记录；有记录但时长为空则合计为 0 分钟（真实值）。
+    totalApprovedDurationMinutes: available(durationAggregate._sum.durationMinutes ?? 0),
+    source: "M2_APPROVED_REPAIRS",
+    generatedAt,
+  };
+}
+
+/**
+ * 成员最近**已通过**维修记录（个人主页与内部主页使用）。
+ * 只返回最小字段集，不带照片二进制、审核备注或内部时间线。
+ */
+export async function listMemberRecentRepairs(
+  memberProfileId: string,
+  limit: number,
+): Promise<MemberRecentRepair[]> {
+  const rows = await getDb().repairRecord.findMany({
+    where: approvedForMember(memberProfileId),
+    select: {
+      id: true,
+      repairDate: true,
+      durationMinutes: true,
+      result: true,
+      content: true,
+      updatedAt: true,
+      category: { select: { name: true } },
+    },
+    orderBy: [{ repairDate: "desc" }, { updatedAt: "desc" }, { id: "desc" }],
+    take: limit,
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    repairDate: row.repairDate ? row.repairDate.toISOString().slice(0, 10) : null,
+    durationMinutes: row.durationMinutes,
+    categoryName: row.category?.name ?? null,
+    result: row.result,
+    contentExcerpt: excerpt(row.content),
+    updatedAt: row.updatedAt.toISOString(),
+  }));
+}
+
+/**
+ * 成员工作队列与最近操作。可包含未通过记录，因此与 `listMemberRecentRepairs` 区分开，
+ * 返回条目带显式 `status`，禁止冒充「已通过维修」。
+ */
+export async function listMemberWorkQueue(memberProfileId: string): Promise<MemberWorkQueue> {
+  const db = getDb();
+  const base = { deletedAt: null, memberProfileId } as const;
+  const [draftCount, pendingCount, rejectedCount] = await Promise.all([
+    db.repairRecord.count({ where: { ...base, status: "DRAFT" } }),
+    db.repairRecord.count({ where: { ...base, status: "PENDING" } }),
+    db.repairRecord.count({ where: { ...base, status: "REJECTED" } }),
+  ]);
+  return { draftCount, pendingCount, rejectedCount };
+}
+
+export async function listMemberRecentActivity(
+  memberProfileId: string,
+  limit: number,
+): Promise<MemberRecentActivity[]> {
+  const rows = await getDb().repairRecord.findMany({
+    where: { deletedAt: null, memberProfileId },
+    select: { id: true, status: true, repairDate: true, content: true, updatedAt: true },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    take: limit,
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    status: row.status as MemberRecentActivity["status"],
+    repairDate: row.repairDate ? row.repairDate.toISOString().slice(0, 10) : null,
+    contentExcerpt: excerpt(row.content),
+    updatedAt: row.updatedAt.toISOString(),
+  }));
+}
+
+function available(value: number): MetricValue {
+  return { value, status: "AVAILABLE" };
+}
+
+/** 正文摘要：压平换行、截断到 60 个码点，不泄露完整长文本。 */
+function excerpt(content: string | null): string {
+  const flat = (content ?? "").replace(/\s+/g, " ").trim();
+  if (!flat) return "未填写维修内容";
+  const chars = [...flat];
+  return chars.length > 60 ? `${chars.slice(0, 60).join("")}…` : flat;
 }
 
 function listWhere(

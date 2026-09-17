@@ -79,6 +79,10 @@ export const Permission = [
   "repair:delete",
   "repair:flag",
   "repair:category:manage",
+  "member.profile.read_self",
+  "member.profile.update_self",
+  "member.profile.read_internal",
+  "member.skill.assign_self",
 ] as const;
 export type Permission = ValueOf<typeof Permission>;
 
@@ -368,6 +372,187 @@ export type UpdateRepairCategoryInput = {
   description?: string | null;
   sortOrder?: number;
 };
+
+// ---------------------------------------------------------------------------
+// M3 成员工作台与个人主页
+// ---------------------------------------------------------------------------
+
+/** 指标值。`UNCONFIGURED` 表示口径未配置（如学期区间缺失），此时 `value` 必须为 null，
+ *  页面显示「待配置」，绝不回退为伪造的 0。 */
+export type MetricStatus = "AVAILABLE" | "UNCONFIGURED";
+export type MetricValue = {
+  value: number | null;
+  status: MetricStatus;
+};
+
+export const SkillStatus = ["ACTIVE", "INACTIVE"] as const;
+export type SkillStatus = ValueOf<typeof SkillStatus>;
+
+/** 技能标签展示视图。含 code 便于前端按稳定机器码分支，不依赖名称文案。 */
+export type SkillView = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+/** 成员资料摘要：工作台欢迎区与个人主页共用的最小身份信息。
+ *  不含 QQ、学号、班级、userId —— 那些只在受保护的单成员内部详情出现。 */
+export type MemberProfileSummary = {
+  memberProfileId: string;
+  displayName: string;
+  nickname: string | null;
+  realName: string | null;
+  avatarUrl: string | null;
+  status: string;
+  joinedAt: string;
+  roles: RoleCode[];
+  skills: SkillView[];
+  version: number;
+};
+
+/** 自我可见的完整资料（`/member/profile`）。QQ 只在此处出现，且页面标注「内部可见」。 */
+export type MemberSelfProfile = MemberProfileSummary & {
+  qq: string | null;
+  studentId: string | null;
+  className: string | null;
+  /** 性别等扩展字段留待 M6；此处置空表示不受 M3 管理。 */
+  editableFields: readonly ["nickname", "skills"];
+};
+
+/** 他人内部主页视图（`/member/profile/[memberProfileId]`）。
+ *  比 self 更窄：不含学号、班级、账号状态细节与管理字段。 */
+export type MemberInternalProfile = MemberProfileSummary & {
+  qq: string | null;
+};
+
+export type MemberRecentRepair = {
+  id: string;
+  repairDate: string | null;
+  durationMinutes: number | null;
+  categoryName: string | null;
+  result: string | null;
+  contentExcerpt: string;
+  updatedAt: string;
+};
+
+/** 工作台「最近操作」条目。可包含未通过记录，因此字段与 `MemberRecentRepair` 区分，
+ *  带显式 status，禁止冒充「已通过维修」。 */
+export type MemberRecentActivity = {
+  id: string;
+  status: RepairStatus;
+  repairDate: string | null;
+  contentExcerpt: string;
+  updatedAt: string;
+};
+
+export type MemberRepairSummary = {
+  totalApprovedCount: MetricValue;
+  termApprovedCount: MetricValue;
+  monthApprovedCount: MetricValue;
+  totalApprovedDurationMinutes: MetricValue;
+  source: "M2_APPROVED_REPAIRS";
+  generatedAt: string;
+};
+
+export type MemberWorkQueue = {
+  draftCount: number;
+  pendingCount: number;
+  rejectedCount: number;
+};
+
+/** M4/M5 尚未接入的中性占位。**禁止**为其编造业务数字。 */
+export type DeferredModule = {
+  available: false;
+  module: "M4" | "M5";
+};
+
+/**
+ * 工作台中允许独立降级的区块。
+ *
+ * 四路维修查询相互独立，某一路失败不应导致整页报错（任务书 §12.1
+ * 「指标加载用稳定骨架，失败时局部错误」）。失败区块在 `MemberDashboard`
+ * 里回退为空数组 / 空队列，并在此字段中列名，供客户端只对该区块渲染错误态。
+ */
+export type MemberDashboardDegraded =
+  | "repairSummary"
+  | "workQueue"
+  | "recentRepairs"
+  | "recentActivity";
+
+export type MemberDashboard = {
+  profile: MemberProfileSummary;
+  repairSummary: MemberRepairSummary;
+  workQueue: MemberWorkQueue;
+  recentRepairs: MemberRecentRepair[];
+  recentActivity: MemberRecentActivity[];
+  /** 加载失败的区块清单；空数组表示全部成功。 */
+  degraded: MemberDashboardDegraded[];
+  notifications: DeferredModule;
+  favorites: DeferredModule;
+  ranking: DeferredModule;
+};
+
+/** 个人主页（自己）聚合视图：资料 + 技能 + 摘要 + 最近已通过记录。 */
+export type MemberSelfProfileView = {
+  profile: MemberSelfProfile;
+  repairSummary: MemberRepairSummary;
+  recentRepairs: MemberRecentRepair[];
+};
+
+/** 他人内部主页聚合视图。 */
+export type MemberInternalProfileView = {
+  profile: MemberInternalProfile;
+  repairSummary: MemberRepairSummary;
+  recentRepairs: MemberRecentRepair[];
+};
+
+export type UpdateMemberProfileInput = {
+  nickname?: string | null;
+  version: number;
+};
+
+export type UpdateMemberProfileResult = {
+  profile: MemberSelfProfile;
+  version: number;
+};
+
+export type UpdateMemberSkillsInput = {
+  skillIds: string[];
+  profileVersion: number;
+};
+
+export type UpdateMemberSkillsResult = {
+  skills: SkillView[];
+  version: number;
+};
+
+export const MEMBER_SKILL_LIMIT = 12;
+export const MEMBER_NICKNAME_MAX_LENGTH = 64;
+export const MEMBER_RECENT_REPAIR_LIMIT = 5;
+
+export interface MemberProfileServiceContract {
+  getSelf(actor: AuthorizedActor): Promise<MemberSelfProfileView>;
+  getInternal(memberProfileId: string, actor: AuthorizedActor): Promise<MemberInternalProfileView>;
+  updateProfile(
+    input: UpdateMemberProfileInput,
+    actor: AuthorizedActor,
+  ): Promise<UpdateMemberProfileResult>;
+  updateSkills(
+    input: UpdateMemberSkillsInput,
+    actor: AuthorizedActor,
+  ): Promise<UpdateMemberSkillsResult>;
+}
+
+export interface SkillQueryServiceContract {
+  listActive(): Promise<SkillView[]>;
+}
+
+export interface MemberDashboardServiceContract {
+  getDashboard(actor: AuthorizedActor): Promise<MemberDashboard>;
+}
 
 export interface JoinApplicationServiceContract {
   list(

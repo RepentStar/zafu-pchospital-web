@@ -69,6 +69,27 @@ test("审计摘要移除秘密并脱敏完整联系方式", () => {
   assert.doesNotMatch(JSON.stringify(redacted), /do-not-log|13800000000|123456789/);
 });
 
+test("审计脱敏只拦凭据类 code 字段，不误伤普通业务字段", () => {
+  // 回归：早期 BLOCKED_KEY 用裸 `code` 匹配，把 `skillCodes` 整键丢掉，
+  // 导致技能变更审计的 before / after 全部变成空对象（审计内容静默丢失）。
+  const redacted = redactAuditSummary({
+    skillCodes: ["REPAIR", "SYSTEM"],
+    errorCode: "SKILL_NOT_FOUND",
+    statusCode: 409,
+    inviteCode: "should-be-removed",
+    verificationCode: "should-be-removed",
+  }) as Record<string, unknown>;
+
+  // 普通业务字段必须保留
+  assert.deepEqual(redacted.skillCodes, ["REPAIR", "SYSTEM"]);
+  assert.equal(redacted.errorCode, "SKILL_NOT_FOUND");
+  assert.equal(redacted.statusCode, 409);
+  // 凭据类 code 仍然必须被移除
+  assert.equal("inviteCode" in redacted, false);
+  assert.equal("verificationCode" in redacted, false);
+  assert.doesNotMatch(JSON.stringify(redacted), /should-be-removed/);
+});
+
 test("公开端点限流返回稳定错误码", () => {
   resetRateLimitsForTests();
   enforceRateLimit("test", 1, 60_000);
