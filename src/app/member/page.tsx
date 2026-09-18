@@ -1,42 +1,46 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { MemberPanel } from "@/components/auth/MemberPanel";
-import { authService } from "@/features/auth/auth-service";
-import { SESSION_COOKIE_NAME } from "@/lib/auth/request";
-import { PageHead } from "@/components/layout/PageHead";
-import { Section } from "@/components/ui/Section";
+
+import { MemberDashboard } from "@/components/member/MemberDashboard";
 import { Button } from "@/components/ui/Button";
-export const metadata: Metadata = { title: "成员中心" };
+import { Card } from "@/components/ui/Card";
+import { Section } from "@/components/ui/Section";
+import { memberCopy } from "@/config/member";
+import { requireMemberPage } from "@/lib/auth/member-page";
+
+export const metadata: Metadata = { title: memberCopy.dashboard.title };
+
+/**
+ * `/member` —— 成员工作台
+ *
+ * 用 `requireMemberPage()`（只保证登录 + 已改密）而不是 `requireActiveMemberPage()`：
+ * 已登录但还没有有效成员档案的用户**不能**在这里被重定向到 `/member`，
+ * 否则会与 `requireActiveMemberPage()` 形成重定向自环。这类用户走下面的空态分支。
+ */
 export default async function MemberPage() {
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value ?? "";
-  let principal;
-  try {
-    principal = await authService.authenticate(token);
-  } catch {
-    redirect("/login");
-  }
-  if (principal.mustChangePassword) redirect("/account/change-password");
-  return (
-    <>
-      <PageHead
-        id="member-title"
-        index="05"
-        label="Member"
-        title="成员中心"
-        lead="当前仅提供身份验证后的最小落地页。"
-      />
-      <Section labelledBy="member-panel-title">
-        <h2 className="sr-only" id="member-panel-title">
-          成员信息
-        </h2>
-        <MemberPanel name={principal.displayName ?? "成员"} roles={principal.roles} />
-        <div className="mt-s-6">
-          <Button href="/member/repairs" variant="solid">
-            进入维修记录
-          </Button>
-        </div>
+  const principal = await requireMemberPage();
+  const isActiveMember = Boolean(principal.memberProfileId) && principal.memberStatus === "ACTIVE";
+
+  if (!isActiveMember) {
+    return (
+      <Section variant="page-head" className="member-workspace" labelledBy="member-title">
+        <h1 className="sr-only" id="member-title">
+          {memberCopy.dashboard.title}
+        </h1>
+        <Card variant="notice">
+          <p>当前账号尚未开通成员身份，暂时无法使用成员工作台。</p>
+          <p>如果你的入团申请已通过审核，请联系管理员确认账号状态。</p>
+          <Button href="/">返回首页</Button>
+        </Card>
       </Section>
-    </>
+    );
+  }
+
+  return (
+    <Section variant="page-head" className="member-workspace" labelledBy="member-title">
+      <MemberDashboard
+        initialDisplayName={principal.displayName ?? memberCopy.common.fallbackName}
+        roles={principal.roles}
+      />
+    </Section>
   );
 }

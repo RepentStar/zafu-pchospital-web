@@ -2695,6 +2695,497 @@ html[data-theme="black-yellow"] {
     text-wrap: pretty;
   }
 
+  /* ------------------------------------------ 成员工作台与个人主页（M3）
+     结构：欢迎区 → 指标卡 → 快捷操作 → 待处理 → 最近记录 → 后续模块接入位。
+     分层只用底色与描边（全站禁止 box-shadow）；数值用等宽数字对齐。
+     状态一律「文字 + 颜色」双通道，不单靠颜色区分。 */
+  .member-workspace {
+    padding-block: clamp(5.75rem, 10vh, 7rem) var(--s-8);
+  }
+  .member-workspace__content {
+    display: grid;
+    gap: clamp(1.75rem, 4vw, 3rem);
+  }
+
+  /* 欢迎区：首字母占位头像 + 身份摘要 */
+  .member-hero {
+    display: grid;
+    gap: var(--s-4);
+    padding-bottom: var(--s-5);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .member-hero__identity {
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+    min-width: 0;
+  }
+  .member-avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--ink);
+    font-size: 1.375rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .member-avatar--lg {
+    width: 4.5rem;
+    height: 4.5rem;
+    font-size: 1.75rem;
+  }
+  .member-hero__text {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+  .member-hero__name {
+    margin: 0;
+    font-size: clamp(1.75rem, 3.6vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+  .member-hero__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+    margin: 0;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
+  .member-hero__meta-num {
+    font-family: var(--font-latin);
+    font-variant-numeric: tabular-nums;
+  }
+  .member-hero__lead {
+    max-width: 64ch;
+    margin: 0;
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--ink-3);
+  }
+  .member-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  /* 区块内的统一小标题 */
+  .member-section {
+    display: grid;
+    gap: var(--s-4);
+  }
+  .member-section__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.75rem;
+  }
+  .member-section__title {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .member-section__tag {
+    font-family: var(--font-latin);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-4);
+  }
+  .member-section__note,
+  .member-section__foot {
+    max-width: 68ch;
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    color: var(--ink-3);
+  }
+
+  /* 局部错误态：只替换失败区块的内容，不影响同页其它区块。
+     分层靠描边与底色（全站禁用 box-shadow）。 */
+  .member-section__error {
+    display: grid;
+    gap: var(--s-3);
+    justify-items: start;
+    padding: var(--s-4);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--surface-2);
+  }
+  .member-section__error p {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    color: var(--ink-2);
+  }
+
+  /* 指标卡：等宽数字 + 明确的未配置状态 */
+  .member-metrics {
+    display: grid;
+    gap: var(--s-3);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  }
+  .member-metric {
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
+    padding: var(--s-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-mid);
+    background: var(--surface-1);
+  }
+  .member-metric__label {
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-3);
+  }
+  .member-metric__value {
+    font-family: var(--font-latin);
+    font-size: clamp(1.5rem, 3vw, 1.875rem);
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  /* 未配置口径：不使用强调色，改用中性 + 明确文案，避免被误读为 0 */
+  .member-metric__value--unconfigured {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+  .member-metric__unit {
+    margin-left: 0.15rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+
+  /* 待处理队列 */
+  .member-queue {
+    display: grid;
+    gap: var(--s-3);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .member-queue__item {
+    display: grid;
+    gap: 0.4rem;
+    padding: var(--s-3) var(--s-4);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--line-strong);
+    border-radius: var(--r-base);
+    background: var(--surface-1);
+  }
+  .member-queue__label {
+    font-size: var(--t-xs);
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+  .member-queue__count {
+    font-family: var(--font-latin);
+    font-size: 1.25rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  /* 有积压时用强调色左边框 + 文字，颜色不是唯一线索（数字本身就表达了） */
+  .member-queue__item--active {
+    border-left-color: var(--accent);
+  }
+
+  /* 快捷操作 */
+  .member-shortcuts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  /* 记录列表（最近已通过 / 最近操作共用） */
+  .member-records {
+    display: grid;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--line-soft);
+  }
+  .member-record {
+    display: grid;
+    gap: 0.35rem;
+    padding: var(--s-3) 0;
+    border-bottom: 1px solid var(--line-soft);
+    min-width: 0;
+  }
+  .member-record__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.75rem;
+  }
+  .member-record__date {
+    font-family: var(--font-latin);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  .member-record__category,
+  .member-record__duration {
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
+  .member-record__excerpt {
+    margin: 0;
+    font-size: 0.9375rem;
+    line-height: 1.66;
+    color: var(--ink-2);
+    overflow-wrap: anywhere;
+  }
+
+  /* 状态标签：文字 + 描边双通道，不只用颜色区分 */
+  .member-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .member-tag--accent {
+    border-color: var(--accent);
+    color: var(--accent-deep);
+  }
+  .member-tag--muted {
+    border-color: var(--line);
+    color: var(--ink-3);
+  }
+
+  /* 技能标签（展示态） */
+  .member-skills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* 技能选择（编辑态）：原生 checkbox 保证键盘与焦点可见 */
+  .member-skill-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .member-skill-option {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 38px;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .member-skill-option input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .member-skill-option__status {
+    color: var(--ink-4);
+    font-size: var(--t-micro);
+    font-weight: 600;
+  }
+  .member-skill-option:hover {
+    border-color: var(--accent);
+  }
+  .member-skill-option:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* 选中态：描边 + 淡底 + 勾选标记（三重线索） */
+  .member-skill-option:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-wash);
+    color: var(--accent-deep);
+  }
+  .member-skill-option:has(input:disabled) {
+    border-color: var(--line);
+    color: var(--ink-4);
+    cursor: not-allowed;
+  }
+
+  /* 资料表（只读字段）：语义用 dl，不伪装成输入框 */
+  .member-fields {
+    display: grid;
+    gap: 0;
+    margin: 0;
+    border-top: 1px solid var(--line-soft);
+  }
+  .member-field {
+    display: grid;
+    gap: 0.25rem;
+    padding: var(--s-3) 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .member-field__label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+  .member-field__value {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  .member-field__value--muted {
+    color: var(--ink-4);
+  }
+
+  /* 编辑表单：昵称输入沿用 .field__input 的尺度，这里只补布局 */
+  .member-form {
+    display: grid;
+    gap: var(--s-4);
+    max-width: 34rem;
+  }
+  .member-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2);
+  }
+  /* 操作反馈：成功用中性强调，失败用 .notice 之外的独立行内提示 */
+  .member-form__status {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: var(--ink-3);
+  }
+  .member-form__status--error {
+    color: var(--ink);
+    border-left: 2px solid var(--accent);
+    padding-left: var(--s-2);
+  }
+
+  /* 加载骨架：保持与真实内容一致的高度，避免布局跳动 */
+  .member-skeleton {
+    display: grid;
+    gap: var(--s-3);
+  }
+  .member-skeleton__bar {
+    height: 1rem;
+    border-radius: var(--r-base);
+    background: var(--surface-2);
+  }
+  .member-skeleton__bar--lg {
+    height: 2.5rem;
+  }
+  .member-skeleton__bar--sm {
+    width: 40%;
+  }
+
+  /* 后续模块接入位：中性面板，明确说明未接入 */
+  .member-upcoming {
+    display: grid;
+    gap: var(--s-3);
+    padding: var(--s-4);
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--r-mid);
+    background: transparent;
+  }
+  .member-upcoming__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .member-upcoming__item {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 8rem;
+  }
+  .member-upcoming__name {
+    font-size: var(--t-xs);
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+  .member-upcoming__state {
+    font-size: var(--t-xs);
+    color: var(--ink-4);
+  }
+
+  @media (min-width: 760px) {
+    .member-field {
+      grid-template-columns: minmax(7rem, 10rem) 1fr;
+      align-items: baseline;
+      gap: var(--s-4);
+    }
+    .member-record {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .member-hero {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+    }
+    .member-hero__identity {
+      grid-column: 1;
+    }
+    .member-hero__actions {
+      grid-column: 2;
+      grid-row: 1;
+      justify-content: flex-end;
+    }
+  }
+
+  @media (min-width: 1100px) {
+    .member-workspace__content {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   /* -------------------------------------------------------------- 文档 */
   .docs__grid {
     display: grid;

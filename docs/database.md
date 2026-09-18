@@ -92,6 +92,13 @@ Route、调用方、Contract、测试与文档；不能留下字段、Enum、错
 - JoinApplication 以服务端招募批次 + 规范化 QQ / 手机号去重，不先创建 User。
 - AuthSession 只存令牌摘要；LoginThrottle 只存 QQ + IP 摘要，登录失败窗口由数据库共享。
 - 改密、密码重置和成员禁用必须在事务内撤销相关有效 Session。
+- 成员资料更新与技能保存各自在 Serializable 事务内「读写版本 + 递增版本 + 写审计」，
+  乐观锁失败重试至多 3 次；审计与业务行同事务提交或一同回滚。
+- `user_skills` 的取消选择只写 `deleted_at`，不删行；恢复时清空 `deleted_at`。
+  唯一约束 `(member_profile_id, skill_id)` 保证并发下不会产生重复关联。
+
+M3 引入 `skills` 与 `user_skills` 两张表（Migration `20260917100000_p2_m3_member_dashboard`）。
+两者都不含 QQ 或任何联系方式，成员侧的引用键始终是 `member_profiles.id`。
 
 完整字段与状态语义见 `docs/contracts/data-contract.md`。
 
@@ -109,7 +116,20 @@ pnpm build
 专用测试 GreatSQL，覆盖 Seed 幂等、招募去重、账号发放幂等、邀请码并发限次和管理员更新
 边界。也可在 PowerShell 用 `$env:RUN_DB_TESTS='1'; pnpm test` 一次运行全部测试。
 
-`pnpm db:health` 应确认数据库可达、GreatSQL 版本、InnoDB、UTC、`utf8mb4` 和排序规则。
+`pnpm db:health` 应确认数据库可达、**产品确为 GreatSQL**、版本严格属于 `8.0.32-27` 基线、InnoDB、
+UTC、`utf8mb4` 和排序规则。脚本同时校验 `@@version` 与 `@@version_comment`：GreatSQL 的
+`version_comment` 形如 `GreatSQL (GPL), Release 27, Revision ...`，`version` 形如 `8.0.32-27`
+（允许其后的 `-` / `+` 构建元数据后缀）。两项必须同时匹配；版本串不能代替产品注释。
+本地若用其它 MySQL 兼容实例替代，该命令会**明确失败**，
+不要把这类实例记为「GreatSQL 已验证」。
+
+连接串中的 `allowPublicKeyRetrieval` **默认关闭**。仅当 MySQL 8+/9 使用
+`caching_sha2_password` 且**未启用 TLS** 时（典型为本机开发），才需要显式追加
+`?allowPublicKeyRetrieval=true`；否则非 TLS 首次认证会报
+`SQLState 08S01 "RSA public key is not available client side"`，在应用层表现为
+`pool timeout: ... active=0 idle=0`，看着像连接池耗尽、实为握手失败。
+该开关会让客户端接受服务端下发的 RSA 公钥，开启后存在中间人替换公钥的风险，
+因此**生产必须改用 TLS，而不是打开它**。
 
 ## 8. 发布、备份与遗留治理
 

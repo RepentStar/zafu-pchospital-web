@@ -100,3 +100,49 @@ PR 中记录影响范围。不强制单独评审；但若影响其他模块，�
 `REPAIR_VERSION_CONFLICT`。列表支持分页、成员、分类、状态、结果、日期、疑难、典型和关键词
 筛选；普通成员只能看到本人全部状态与他人的 `APPROVED` 记录。照片内容接口要求有效 Session，
 并返回私有缓存、`nosniff`、正确 MIME 与长度。
+
+## M3 成员工作台与个人主页
+
+```text
+GET   /api/v1/member/dashboard                     # 工作台聚合视图
+GET   /api/v1/member/profile                       # 自我可见资料 + 摘要 + 最近记录
+PATCH /api/v1/member/profile                       # 更新昵称（乐观锁）
+PUT   /api/v1/member/profile/skills                # 覆盖式保存技能集合（乐观锁）
+GET   /api/v1/members/:memberProfileId/profile     # 他人内部主页（字段已裁剪）
+GET   /api/v1/skills                               # 启用中的技能标签（供选择器使用）
+```
+
+所有端点为 `runtime = "nodejs"` + `dynamic = "force-dynamic"`，响应头固定
+`Cache-Control: private, no-store` —— 成员资料与会话上下文不允许被任何共享缓存留存。
+
+写入约束：
+
+- `PATCH /member/profile` 的请求体只接受 `nickname` 与 `version`；出现其他字段
+  （如 `realName`、`studentId`、`className`）返回 `VALIDATION_FAILED` 400，
+  而不是静默忽略，避免客户端误以为越权字段已被写入。
+- `PUT /member/profile/skills` 接受**完整期望集合** `skillIds` + `profileVersion`，
+  天然幂等：取消选择走 `UserSkill` 软删除，重新选择恢复同一行；
+  数量上限与未知技能分别返回 `SKILL_LIMIT_EXCEEDED` 400 / `SKILL_NOT_FOUND` 404。
+- 版本过期统一返回 `MEMBER_PROFILE_VERSION_CONFLICT` 409，客户端应提示刷新而非重试。
+- 写接口全部执行 `assertSameOrigin()`（Cookie 认证的 CSRF 防护）。
+
+可见性边界：
+
+- `GET /member/dashboard` 与 `GET /skills` 的响应**不含** QQ、学号、班级与 `userId`；
+- QQ 只出现在 `GET /member/profile`（自我）与 `GET /members/:id/profile`（内部）两处，
+  页面必须标注「内部可见」；
+- 他人主页对不存在、已软删除、非有效成员与无权访问统一返回 `MEMBER_PROFILE_NOT_FOUND` 404，
+  避免成员枚举；
+- M4/M5 占位字段固定为 `{ available: false, module: "M4" | "M5" }`，不携带任何业务数字。
+
+局部降级与日期口径：
+
+- `GET /member/dashboard` 额外返回 `degraded: MemberDashboardDegraded[]`，列出加载失败的区块
+  （`repairSummary` / `workQueue` / `recentRepairs` / `recentActivity`）。四路查询相互独立，
+  任一路失败**不得**让其余区块一并报错，客户端只对失败区块渲染错误态；全部成功时该字段为空数组。
+  失败区块回退为空数组 / 空队列，`repairSummary` 回退时所有 `MetricValue` 标为 `UNCONFIGURED`，
+  **绝不**伪造 `0`。
+- 「本月 / 本学期」是日期相对口径。`GET /member/profile`、
+  `GET /members/:memberProfileId/profile` 与工作台共用同一套
+  `resolveMemberRanges(now)`，三个入口的同名指标必须相等。学期未配置时
+  `termApprovedCount` 返回 `{ value: null, status: "UNCONFIGURED" }`。

@@ -48,6 +48,12 @@ before(async () => {
   await db.joinApplicationReview.deleteMany();
   await db.joinApplication.deleteMany();
   await db.passwordCredential.deleteMany();
+  // M3 引入 user_skills（FK → member_profiles / skills）。
+  // 本文件按全表清空 + 重建 fixture 的方式隔离数据，若不清 user_skills，
+  // 在 M3 测试先跑（同进程顺序执行、共享库）时会残留引用，
+  // 导致 memberProfile.deleteMany() 报 `member_profile_id` 外键冲突。
+  // 保持 deleteMany 相对顺序即可保证父表在子表之后删除。
+  await db.userSkill.deleteMany();
   await db.userRole.deleteMany();
   await db.memberProfile.deleteMany();
   await db.userIdentity.deleteMany();
@@ -73,7 +79,9 @@ before(async () => {
   });
   await db.repairCategory.create({
     data: {
-      id: "10000000-0000-4000-8000-000000000003",
+      // 测试专用 UUID 段（9xxxxxxx），避免与 seed 的 10000000-… 段冲突。
+      // 注意：M3 seed 使用 10000000-…-0003 作为 SYSTEM 分类，这里若继续占用会撞主键。
+      id: "90000000-0000-4000-8000-000000000003",
       code: "M2_TEST",
       name: "M2 测试分类",
       sortOrder: 1,

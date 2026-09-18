@@ -2,7 +2,17 @@ import { AppError } from "@/lib/api/errors";
 import type { AuthorizedActor, Permission, RoleCode } from "@/types/contracts";
 
 export const rolePermissions: Readonly<Record<RoleCode, readonly Permission[]>> = {
-  MEMBER: ["invite:redeem", "repair:create", "repair:read", "repair:update", "repair:submit"],
+  MEMBER: [
+    "invite:redeem",
+    "repair:create",
+    "repair:read",
+    "repair:update",
+    "repair:submit",
+    "member.profile.read_self",
+    "member.profile.update_self",
+    "member.profile.read_internal",
+    "member.skill.assign_self",
+  ],
   ADMIN: [
     "join:read",
     "join:review",
@@ -20,6 +30,10 @@ export const rolePermissions: Readonly<Record<RoleCode, readonly Permission[]>> 
     "repair:delete",
     "repair:flag",
     "repair:category:manage",
+    "member.profile.read_self",
+    "member.profile.update_self",
+    "member.profile.read_internal",
+    "member.skill.assign_self",
   ],
 };
 

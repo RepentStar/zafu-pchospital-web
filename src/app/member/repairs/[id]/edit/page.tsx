@@ -3,10 +3,10 @@ import { PageHead } from "@/components/layout/PageHead";
 import { RepairEditor } from "@/components/repairs/RepairEditor";
 import { Section } from "@/components/ui/Section";
 import { repairCopy, repairResultLabels } from "@/config/repairs";
-import { requireMemberPage } from "@/lib/auth/member-page";
+import { requireActiveMemberPage } from "@/lib/auth/member-page";
 export const metadata: Metadata = { title: "编辑维修记录" };
 export default async function EditRepairPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireMemberPage();
+  await requireActiveMemberPage();
   const { id } = await params;
   return (
     <>

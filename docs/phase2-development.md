@@ -8,14 +8,14 @@
 
 # 0. 当前开发状态
 
-> 更新时间：2026-09-16。状态以组织仓库 PR 合并结果为准。
+> 更新时间：2026-09-17。状态以组织仓库 PR 合并结果为准。
 
 | 模块                    | 状态      | 当前说明                                        |
 | ----------------------- | --------- | ----------------------------------------------- |
 | M0 基础架构与数据契约   | PR 审核中 | PR #26，M1 分支以提交 `2baed1e` 为基线          |
 | M1 账号与权限           | 已完成    | `codex/p2-m1-auth-members` 已完成实现和本地验收 |
-| M2 维修记录核心         | 未开始    | 依赖 M0 合并；与 M1 可在契约稳定后并行          |
-| M3 成员工作台与个人主页 | 未开始    | 依赖 M1 / M2                                    |
+| M2 维修记录核心         | 已完成    | 全流程、照片存储、审核与审计已落地，见 M2 交付报告 |
+| M3 成员工作台与个人主页 | 已实现    | `feat/p2-member-dashboard`，待合并；见 M3 交付报告 |
 | M4 内部交流与通知       | 未开始    | 依赖 M2                                         |
 | M5 数据统计与排行榜     | 未开始    | 依赖 M2                                         |
 | M6 管理后台             | 未开始    | 依赖 M1 / M2 及相关领域能力                     |
@@ -27,6 +27,11 @@ JoinApplication、InviteCode、AccountProvision、公共 Enum / API Contract、�
 
 M1 新增 AuthSession、LoginThrottle、QQ + 密码登录、首次改密、邀请码自助注册、成员核心管理
 API 与 `/join` 真实入库；完整管理员界面仍归 M6，完整成员工作台仍归 M3。
+
+M3 新增 `Skill` / `UserSkill` 两张表与技能 Seed，落地 `/member` 工作台、`/member/profile`
+个人主页与 `/member/profile/[memberProfileId]` 他人内部主页；维修摘要**复用** M2 的
+`listApprovedRepairsForAnalytics()` 正式入口，不复制统计逻辑；M4/M5 仅提供
+`{ available: false }` 中性接入位，不返回任何业务数字。
 
 M0 后续治理 Issue（由维护者手动加入需要的 Project / Milestone）：
 

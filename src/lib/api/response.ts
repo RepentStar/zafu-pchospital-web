@@ -18,11 +18,11 @@ export type ApiFailure = {
 export function apiSuccess<T>(
   data: T,
   requestId: string,
-  options: { status?: number; pagination?: PaginationMeta } = {},
+  options: { status?: number; pagination?: PaginationMeta; headers?: Record<string, string> } = {},
 ) {
   return NextResponse.json<ApiSuccess<T>>(
     { success: true, data, meta: { requestId, pagination: options.pagination } },
-    { status: options.status ?? 200 },
+    { status: options.status ?? 200, headers: options.headers },
   );
 }
 
@@ -38,6 +38,10 @@ export function apiFailure(error: unknown, requestId: string) {
       },
       meta: { requestId },
     },
-    { status: publicError.status },
+    {
+      status: publicError.status,
+      // 失败响应同样禁止缓存，避免把成员上下文细节留在共享缓存里。
+      headers: { "Cache-Control": "private, no-store" },
+    },
   );
 }
