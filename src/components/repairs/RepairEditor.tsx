@@ -218,14 +218,14 @@ export function RepairEditor({ recordId }: { recordId: string }) {
     .replace("{size}", formatBytes(record.photoLimits.maxBytes))
     .replace("{count}", String(record.photoLimits.maxFiles));
   return (
-    <div className="gap-s-6 grid">
+    <div className="repair-editor">
       {rejection ? (
         <Card variant="notice">
           <strong>最新退回原因</strong>
           <p>{rejection.note}</p>
         </Card>
       ) : null}
-      <Card>
+      <Card className="repair-panel">
         <form
           className="gap-s-5 grid"
           onSubmit={(e) => {
@@ -233,7 +233,7 @@ export function RepairEditor({ recordId }: { recordId: string }) {
             void save();
           }}
         >
-          <div className="gap-s-4 grid md:grid-cols-2">
+          <div className="gap-s-4 grid items-start md:grid-cols-2">
             <label className="field">
               <span className="field__label">
                 维修日期
@@ -307,7 +307,7 @@ export function RepairEditor({ recordId }: { recordId: string }) {
           ) : null}
         </form>
       </Card>
-      <Card className="gap-s-4 grid">
+      <Card className="repair-panel">
         <div>
           <h2 className="text-display-3 font-bold">维修照片</h2>
           <p className="text-ink-3">{photoHint}</p>

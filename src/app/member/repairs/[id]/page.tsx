@@ -14,7 +14,7 @@ export default async function RepairDetailPage({ params }: { params: Promise<{ i
   await requireActiveMemberPage();
   const { id } = await params;
   return (
-    <>
+    <div className="repair-page">
       <PageHead
         id="repair-detail-title"
         index="08"
@@ -33,6 +33,6 @@ export default async function RepairDetailPage({ params }: { params: Promise<{ i
           timelineLabels={repairTimelineLabels}
         />
       </Section>
-    </>
+    </div>
   );
 }

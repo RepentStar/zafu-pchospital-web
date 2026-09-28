@@ -346,22 +346,22 @@
   --status-success: #0f7a45;
   --status-success-deep: #0a5c34;
   --status-success-on: #ffffff;
-  --status-success-wash: rgb(15 122 69 / 0.10);
+  --status-success-wash: rgb(15 122 69 / 0.1);
   --status-success-line: rgb(15 122 69 / 0.32);
   --status-warning: #8a4b00;
   --status-warning-deep: #6b3a00;
   --status-warning-on: #ffffff;
-  --status-warning-wash: rgb(138 75 0 / 0.10);
+  --status-warning-wash: rgb(138 75 0 / 0.1);
   --status-warning-line: rgb(138 75 0 / 0.32);
   --status-danger: #c62828;
   --status-danger-deep: #8e1818;
   --status-danger-on: #ffffff;
-  --status-danger-wash: rgb(198 40 40 / 0.10);
+  --status-danger-wash: rgb(198 40 40 / 0.1);
   --status-danger-line: rgb(198 40 40 / 0.32);
   --status-neutral: #5f5f5d;
   --status-neutral-deep: #3d3d3b;
   --status-neutral-on: #ffffff;
-  --status-neutral-wash: rgb(95 95 93 / 0.10);
+  --status-neutral-wash: rgb(95 95 93 / 0.1);
   --status-neutral-line: rgb(95 95 93 / 0.32);
 
   /* ------------------------------------ 视觉与排版令牌（非颜色部分）
@@ -387,8 +387,8 @@
      中文它没有字形，浏览器会自动继续往下找系统中文黑体，所以中文渲染不受影响。 */
   --font-latin: "Archivo", "Archivo Fallback", "Helvetica Neue", Arial, sans-serif;
   --font-sans:
-    "Archivo", "Archivo Fallback", "PingFang SC", "HarmonyOS Sans SC", "MiSans",
-    "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+    "Archivo", "Archivo Fallback", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei",
+    "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
 
   /* 字号：1.333 完美四度音阶；正文固定 rem，展示级用 clamp 流体 */
   --t-micro: 0.6875rem;
@@ -2619,7 +2619,73 @@ html[data-theme="black-yellow"] {
      成员需要快速查找和补录维修记录，因此这里采用紧凑页头、渐进筛选与单列数据表。
      窄屏仍保留同一信息顺序，仅把表格行重排为可点击的纵向记录，不复制第二套内容。 */
   .repair-workspace {
-    padding-block: clamp(5.75rem, 10vh, 7rem) var(--s-8);
+    padding-block: clamp(1.5rem, 3vw, 2.5rem) var(--s-8);
+  }
+  .repair-workspace > .shell {
+    max-width: 80rem;
+  }
+  /* 维修子页在成员工作台内，页头和正文共用一条居中的内容轴。 */
+  .repair-page .shell {
+    max-width: 72rem;
+  }
+  .repair-page .page-head {
+    padding-block: clamp(1.5rem, 3vw, 2.5rem) var(--s-5);
+  }
+  .repair-page .page-head .sec-title {
+    font-size: clamp(2rem, 3vw, 3rem);
+  }
+  .repair-page .band {
+    padding-block: var(--s-6) var(--s-8);
+  }
+  /* Card 仅绘制表面，维修页须自行提供统一的内容内边距。 */
+  .repair-panel {
+    display: grid;
+    min-width: 0;
+    gap: var(--s-4);
+    padding: clamp(var(--s-4), 2.5vw, var(--s-6));
+  }
+  .repair-panel > * {
+    min-width: 0;
+  }
+  .repair-detail,
+  .repair-editor {
+    display: grid;
+    min-width: 0;
+    gap: var(--s-5);
+  }
+  .repair-detail__facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-4) var(--s-6);
+    margin: 0;
+  }
+  .repair-detail__facts > div {
+    display: grid;
+    align-content: start;
+    gap: var(--s-1);
+    min-width: 0;
+  }
+  .repair-detail__facts dd,
+  .repair-detail .repair-panel > p {
+    overflow-wrap: anywhere;
+  }
+  .repair-detail__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2);
+  }
+  .repair-create {
+    justify-items: start;
+  }
+  @media (max-width: 759px) {
+    .repair-detail__facts {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .repair-create > .btn {
+      width: 100%;
+      justify-content: center;
+    }
   }
   .repair-workspace__content {
     display: grid;
@@ -3019,6 +3085,10 @@ html[data-theme="black-yellow"] {
       padding: 0.45rem 0;
       border: 0;
       text-align: left;
+    }
+    .repair-table td {
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
     .repair-table td::before,
     .admin-table td::before {
@@ -4725,7 +4795,6 @@ html[data-theme="black-yellow"] {
     color: var(--ink-3);
   }
 
-
   /* ---------------------------------------------------------- 账号菜单（T-P0-2）
      挂在成员 hero 行动区，以及成员 / 管理两侧侧栏足部。
      无投影；面板用描边 + surface 底色。 */
@@ -5950,8 +6019,6 @@ html[data-theme="black-yellow"] {
       padding-block-end: calc(4.25rem + env(safe-area-inset-bottom, 0px));
     }
   }
-
-
 
   /* ============================================================
      工作台重构：底部标签栏 / 待办角标 / 首页视觉件（成员 + 管理共用）
@@ -7231,7 +7298,6 @@ html[data-theme="black-yellow"] {
     }
   }
 }
-
 
 /* 维修活动公开列表 / 详情（M1） */
 /* 窄屏：竖列；≥ --breakpoint-md（760px）：

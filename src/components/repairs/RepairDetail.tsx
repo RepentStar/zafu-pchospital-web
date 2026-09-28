@@ -30,7 +30,9 @@ export function RepairDetail({ recordId, statusLabels, resultLabels, timelineLab
       const j = await r.json();
       if (!j.success) {
         setState(
-          j.error.code === "REPAIR_NOT_FOUND" || j.error.code === "REPAIR_FORBIDDEN" ? "forbidden" : "error",
+          j.error.code === "REPAIR_NOT_FOUND" || j.error.code === "REPAIR_FORBIDDEN"
+            ? "forbidden"
+            : "error",
         );
         return;
       }
@@ -63,13 +65,15 @@ export function RepairDetail({ recordId, statusLabels, resultLabels, timelineLab
   if (!record) return null;
 
   return (
-    <div className="gap-s-6 grid">
-      <Card className="gap-s-4 grid">
+    <div className="repair-detail">
+      <Card className="repair-panel">
         <div className="gap-s-3 flex flex-wrap justify-between">
           <h2 className="text-display-3 font-bold">基础信息</h2>
-          <span>{statusLabels[record.status]}</span>
+          <span className={`repair-tag repair-tag--${record.status.toLowerCase()}`}>
+            {statusLabels[record.status]}
+          </span>
         </div>
-        <dl className="gap-s-3 grid md:grid-cols-2">
+        <dl className="repair-detail__facts">
           <div>
             <dt className="text-ink-3 text-sm">维修成员</dt>
             <dd>{record.member.name}</dd>
@@ -98,15 +102,19 @@ export function RepairDetail({ recordId, statusLabels, resultLabels, timelineLab
           {record.isDifficult ? (
             <span className="member-tag member-tag--accent">{communityCopy.flags.difficult}</span>
           ) : null}
-          {record.isTypical ? <span className="member-tag">{communityCopy.flags.typical}</span> : null}
+          {record.isTypical ? (
+            <span className="member-tag">{communityCopy.flags.typical}</span>
+          ) : null}
         </div>
-        <div className="community-actions">
+        <div className="repair-detail__actions">
           <FavoriteToggle
             recordId={record.id}
             isFavorited={record.isFavorited}
             onChanged={(favorited) => setRecord({ ...record, isFavorited: favorited })}
           />
-          {record.canEdit ? <Button href={`/member/repairs/${record.id}/edit`}>继续编辑</Button> : null}
+          {record.canEdit ? (
+            <Button href={`/member/repairs/${record.id}/edit`}>继续编辑</Button>
+          ) : null}
         </div>
         {record.canFlag ? (
           <RepairFlagControls
@@ -117,16 +125,16 @@ export function RepairDetail({ recordId, statusLabels, resultLabels, timelineLab
           />
         ) : null}
       </Card>
-      <Card className="gap-s-3 grid">
+      <Card className="repair-panel">
         <h2 className="text-display-3 font-bold">维修内容</h2>
         <p className="text-ink-2 whitespace-pre-wrap">{record.content ?? "待补充"}</p>
       </Card>
-      <Card className="gap-s-3 grid">
+      <Card className="repair-panel">
         <h2 className="text-display-3 font-bold">维修结果</h2>
         <p>{record.result ? resultLabels[record.result] : "待补充"}</p>
         {record.remark ? <p className="text-ink-2 whitespace-pre-wrap">{record.remark}</p> : null}
       </Card>
-      <Card className="gap-s-4 grid">
+      <Card className="repair-panel">
         <h2 className="text-display-3 font-bold">维修照片</h2>
         {record.photos.length ? (
           <div className="gap-s-4 grid md:grid-cols-2">
@@ -146,7 +154,7 @@ export function RepairDetail({ recordId, statusLabels, resultLabels, timelineLab
           <p>暂无照片。</p>
         )}
       </Card>
-      <Card className="gap-s-3 grid">
+      <Card className="repair-panel">
         <h2 className="text-display-3 font-bold">审核信息</h2>
         {record.reviews.length ? (
           record.reviews.map((r) => (
@@ -160,7 +168,7 @@ export function RepairDetail({ recordId, statusLabels, resultLabels, timelineLab
           <p>尚无审核记录。</p>
         )}
       </Card>
-      <Card className="gap-s-3 grid">
+      <Card className="repair-panel">
         <h2 className="text-display-3 font-bold">记录时间线</h2>
         <ol className="gap-s-3 grid">
           {record.timeline.map((e) => (
@@ -173,7 +181,7 @@ export function RepairDetail({ recordId, statusLabels, resultLabels, timelineLab
           ))}
         </ol>
       </Card>
-      <Card className="gap-s-3 grid">
+      <Card className="repair-panel">
         <RepairComments recordId={record.id} />
       </Card>
       <p className="sr-only">{repairCopy.detail.title}</p>

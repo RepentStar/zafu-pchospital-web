@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "新建维修记录" };
 export default async function NewRepairPage() {
   await requireActiveMemberPage();
   return (
-    <>
+    <div className="repair-page">
       <PageHead
         id="new-repair-title"
         index="08"
@@ -22,6 +22,6 @@ export default async function NewRepairPage() {
         </h2>
         <CreateRepairDraft />
       </Section>
-    </>
+    </div>
   );
 }

@@ -25,7 +25,7 @@ export function CreateRepairDraft() {
     }
   }
   return (
-    <Card className="gap-s-5 grid">
+    <Card className="repair-panel repair-create">
       <h2 className="text-display-3 font-bold">建立一条空白草稿</h2>
       <p className="text-ink-2">草稿只对你和管理员可见。建立后即可上传照片并逐步填写。</p>
       {error ? (

@@ -9,7 +9,7 @@ export default async function EditRepairPage({ params }: { params: Promise<{ id:
   await requireActiveMemberPage();
   const { id } = await params;
   return (
-    <>
+    <div className="repair-page">
       <PageHead
         id="edit-repair-title"
         index="08"
@@ -23,6 +23,6 @@ export default async function EditRepairPage({ params }: { params: Promise<{ id:
         </h2>
         <RepairEditor recordId={id} />
       </Section>
-    </>
+    </div>
   );
 }

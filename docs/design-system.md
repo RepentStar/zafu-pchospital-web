@@ -390,6 +390,9 @@ Warning 色相刻意偏琥珀（远离 accent 的信号黄 / 钴蓝），避免�
 | `MemberDashboard` / `MemberShortcuts` / `MemberUpcoming` / 工作台区块                                        | `member/`    | `/member` 工作台                                                   |
 | `RepairComments` / `FavoriteToggle` / `FavoriteList` / `NotificationInbox` / `RepairFlagControls`            | `community/` | 维修详情、工作台摘要、`/member/notifications`、`/member/favorites` |
 
+成员维修页使用 `.repair-page` 对齐页头与正文，卡片内容统一用 `.repair-panel` 添加内边距；
+桌面端基础信息双列，手机端单列，均沿用 `Card` 和语义间距令牌。
+
 M4 稳定视觉模式（均在 `globals.css` `@layer components`，无 `box-shadow`，圆角只用 `--r-base` / `--r-mid` / `999px`）：
 
 | 类                                                                   | 用途                                       |
