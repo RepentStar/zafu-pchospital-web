@@ -297,26 +297,101 @@ dbTest("导入直接落 APPROVED，写齐 timeline 与审计；重名拒收行�
   assert.equal(await db.repairRecord.count({ where: { content: "重装系统。" } }), 0);
 });
 
-dbTest("同一批行重复导入只跳过不重复入库；同指纹的两行去重", async () => {
+dbTest("同一批行重复导入只跳过不重复入库", async () => {
   const db = getDb();
   const plan = classifyHistoryRows(inputRows("（幂等用例）"), {
     members: [{ profileId: MEMBER_PROFILE_ID, realName: "HZ张三" }],
     categories: [{ id: CATEGORY_ID, name: "HZ 测试分类", isActive: true }],
     today: new Date().toISOString().slice(0, 10),
   });
-  // 构造与第 2 行字段完全相同的重复行：指纹一致，同批内也按同一记录处理。
-  const duplicated = { ...plan.valid[0]!, lineNo: 99 };
-  assert.equal(duplicated.idempotencyKey, plan.valid[0]!.idempotencyKey);
-  const rows = [...plan.valid, duplicated];
 
-  const firstRun = await applyHistoryImport(rows, adminActor());
-  assert.deepEqual(firstRun, { inserted: 1, skipped: 1 }, "同指纹第二行应跳过");
-  const secondRun = await applyHistoryImport(rows, adminActor());
-  assert.deepEqual(secondRun, { inserted: 0, skipped: 2 }, "重跑整批应全部跳过");
+  const firstRun = await applyHistoryImport(plan.valid, adminActor());
+  assert.deepEqual(firstRun, { inserted: 1, skipped: 0 });
+  const secondRun = await applyHistoryImport(plan.valid, adminActor());
+  assert.deepEqual(secondRun, { inserted: 0, skipped: 1 }, "重跑整批应全部跳过");
   assert.equal(
     await db.repairRecord.count({ where: { createRequestKey: plan.valid[0]!.idempotencyKey } }),
     1,
     "落库记录不应重复",
+  );
+});
+
+/** 第 2 行与第 1 行业务字段完全相同（同一人同一天两台机器做同样的活）。 */
+function duplicatedRows(contentSuffix: string): HistoryInputRow[] {
+  const rows = inputRows(contentSuffix);
+  rows[1] = { lineNo: 3, raw: { ...rows[0]!.raw } };
+  return rows;
+}
+
+dbTest("同组重复行不再被吞：第 2 行得到 #2 键并入库", async () => {
+  const db = getDb();
+  const plan = classifyHistoryRows(duplicatedRows("（同组用例）"), {
+    members: [{ profileId: MEMBER_PROFILE_ID, realName: "HZ张三" }],
+    categories: [{ id: CATEGORY_ID, name: "HZ 测试分类", isActive: true }],
+    today: new Date().toISOString().slice(0, 10),
+  });
+  assert.equal(plan.valid.length, 2);
+  const [first, second] = plan.valid.map((entry) => entry.idempotencyKey);
+  assert.notEqual(second, first, "同组两行必须是两个键，不能折成一条");
+  assert.equal(second, `${first}#2`);
+
+  const firstRun = await applyHistoryImport(plan.valid, adminActor());
+  assert.deepEqual(firstRun, { inserted: 2, skipped: 0 }, "同组两行都应收录");
+  assert.equal(
+    await db.repairRecord.count({ where: { createRequestKey: { in: [first!, second!] } } }),
+    2,
+  );
+  const secondRun = await applyHistoryImport(plan.valid, adminActor());
+  assert.deepEqual(secondRun, { inserted: 0, skipped: 2 }, "重跑仍全部跳过");
+});
+
+dbTest("增量补录：旧键已入库时重跑只补缺失的第 2 行", async () => {
+  const db = getDb();
+  const plan = classifyHistoryRows(duplicatedRows("（增量补录用例）"), {
+    members: [{ profileId: MEMBER_PROFILE_ID, realName: "HZ张三" }],
+    categories: [{ id: CATEGORY_ID, name: "HZ 测试分类", isActive: true }],
+    today: new Date().toISOString().slice(0, 10),
+  });
+  // 模拟修复前的状态：同组只导入了第一行（第 2 行被当作重复吞掉）。
+  await applyHistoryImport([plan.valid[0]!], adminActor());
+  const backfill = await applyHistoryImport(plan.valid, adminActor());
+  assert.deepEqual(backfill, { inserted: 1, skipped: 1 }, "只补第 2 行");
+  assert.equal(
+    await db.repairRecord.count({
+      where: { createRequestKey: { in: plan.valid.map((entry) => entry.idempotencyKey) } },
+    }),
+    2,
+  );
+});
+
+dbTest("暂存同组行同样保留序号：两行都落暂存而不是折成一行", async () => {
+  const db = getDb();
+  const rows: HistoryInputRow[] = ["HZ重复行", "HZ重复行"].map((name) => ({
+    lineNo: 2,
+    raw: {
+      name,
+      repairDate: "2025-06-03",
+      durationMinutes: "30",
+      categoryName: "HZ 测试分类",
+      content: "重复行暂存用例。",
+    },
+  }));
+  const plan = classifyHistoryRows(rows, {
+    members: [{ profileId: MEMBER_PROFILE_ID, realName: "HZ张三" }],
+    categories: [{ id: CATEGORY_ID, name: "HZ 测试分类", isActive: true }],
+    today: new Date().toISOString().slice(0, 10),
+    options: { storePendingUnmatched: true },
+  });
+  assert.equal(plan.pending.length, 2);
+  assert.equal(plan.pending[1]!.fingerprint, `${plan.pending[0]!.fingerprint}#2`);
+
+  const stored = await storePendingHistory(plan.pending, adminActor(), FIXTURE_SOURCE_FILE);
+  assert.deepEqual(stored, { stored: 2, skipped: 0 });
+  assert.equal(
+    await db.repairHistoryPending.count({
+      where: { fingerprint: { in: plan.pending.map((row) => row.fingerprint) } },
+    }),
+    2,
   );
 });
 
