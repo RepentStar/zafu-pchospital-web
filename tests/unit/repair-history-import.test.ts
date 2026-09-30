@@ -321,3 +321,31 @@ test("行指纹稳定且随字段变化", () => {
   assert.ok(historyRowKey(base).startsWith("history-import:"));
   assert.ok(historyRowKey(base).length <= 128);
 });
+
+test("同组第 2..N 行追加出现序号：一天多台机器做同样的活不再被吞", () => {
+  const options = {
+    defaultDurationMinutes: 30,
+    fallbackCategoryId: "c-fallback",
+    storePendingUnmatched: true,
+  };
+  const plan = classifyHistoryRows(
+    [
+      // 前两行业务字段完全相同（同一人同一天两台机器，都写「清灰」）→ 第 2 行 #2
+      row(2, {}),
+      row(3, {}),
+      // 时长不同 → 独立键，不受序号影响
+      row(4, { durationMinutes: "60" }),
+      // 未在册的两行同理：第 2 行按 #2 暂存，注册后才补得回来
+      row(5, { name: "王五" }),
+      row(6, { name: "王五" }),
+    ],
+    { members, categories, today, options },
+  );
+  assert.equal(plan.valid.length, 3);
+  const keys = plan.valid.map((entry) => entry.idempotencyKey);
+  assert.equal(keys[1], `${keys[0]}#2`, "同组第 2 行应追加 #2");
+  assert.notEqual(keys[2], keys[0], "不同组不应追加序号");
+  assert.equal(new Set(keys).size, 3);
+  assert.equal(plan.pending.length, 2);
+  assert.equal(plan.pending[1]!.fingerprint, `${plan.pending[0]!.fingerprint}#2`);
+});

@@ -227,6 +227,12 @@ export function stripClassPrefixHistoryName(name: string): string | null {
  *   两条路径下必须得到同一个键 —— 否则同一条记录会被两边各写一次；
  * - 备注（`remark`）：其中混着补录口径的留痕（默认时长、兜底分类等），换个 `--default-duration`
  *   重跑就会因备注文本变化而算成新行，把「幂等」打破。备注不是业务标识字段。
+ *
+ * 业务字段完全相同的行由 `classifyHistoryRows` 追加**出现序号**（`#2`、`#3`…）：
+ * 义修现场「同一个人同一天给多台机器做同样的活」（一天 5 台「清灰 30 分钟」）是 5 次真实维修，
+ * 只按业务字段会把第 2..N 台当成重复行丢掉 —— 2026-09-30 生产实测两张收集表被吞 126 行，
+ * 逐行复核后约 119 行机主各不相同。序号让「同组第 1 行保持原键」（与既有导入一致，重跑即跳过）、
+ * 「第 2..N 行可增量补录」，既修掉误吞，又不破坏重跑的幂等。
  */
 export function historyRowKey(row: {
   realName: string;
@@ -277,6 +283,17 @@ export function classifyHistoryRows(
   const valid: ValidHistoryRow[] = [];
   const pending: PendingHistoryRow[] = [];
   const rejected: RejectedHistoryRow[] = [];
+
+  /**
+   * 同组（业务字段相同 → 基础指纹相同）行的出现计数，按文件行序。
+   * 第 1 次保持原键（与既有导入的行一致，重跑即跳过）；第 2..N 次追加 `#N`（可增量补录）。
+   */
+  const occurrences = new Map<string, number>();
+  const keyWithOccurrence = (base: string): string => {
+    const count = (occurrences.get(base) ?? 0) + 1;
+    occurrences.set(base, count);
+    return count === 1 ? base : `${base}#${count}`;
+  };
 
   for (const input of inputs) {
     const reject = (reason: string) => rejected.push({ lineNo: input.lineNo, reason });
@@ -397,14 +414,16 @@ export function classifyHistoryRows(
         content,
         result,
         remark,
-        fingerprint: historyRowKey({
-          realName: resolvedName,
-          categoryId,
-          repairDate,
-          durationMinutes,
-          content,
-          result,
-        }),
+        fingerprint: keyWithOccurrence(
+          historyRowKey({
+            realName: resolvedName,
+            categoryId,
+            repairDate,
+            durationMinutes,
+            content,
+            result,
+          }),
+        ),
       });
       continue;
     }
@@ -421,14 +440,16 @@ export function classifyHistoryRows(
       content,
       result,
       remark,
-      idempotencyKey: historyRowKey({
-        realName,
-        categoryId,
-        repairDate,
-        durationMinutes,
-        content,
-        result,
-      }),
+      idempotencyKey: keyWithOccurrence(
+        historyRowKey({
+          realName,
+          categoryId,
+          repairDate,
+          durationMinutes,
+          content,
+          result,
+        }),
+      ),
     });
   }
   return { valid, pending, rejected };
