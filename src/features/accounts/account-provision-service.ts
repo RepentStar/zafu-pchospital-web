@@ -12,6 +12,7 @@ import {
   resolveOrCreateUser,
   setInitialPassword,
 } from "@/features/accounts/account-repository";
+import { claimHistoryForNewMember } from "@/features/repairs/repair-history-import-service";
 
 export class AccountProvisionService implements AccountProvisionServiceContract {
   async provisionFromApplication(
@@ -93,7 +94,15 @@ export class AccountProvisionService implements AccountProvisionServiceContract 
             memberProfileId,
           },
         });
-        return { completed, passwordCreated };
+        return { completed, passwordCreated, memberProfileId, realName: application.realName };
+      });
+      // 建档后按姓名补录历史暂存行（issue #72 评审 1）。独立事务且内部吞异常：
+      // 历史数据的问题不能让发放失败，失败的暂存行保留、重跑导入也能补。
+      await claimHistoryForNewMember({
+        memberProfileId: result.memberProfileId,
+        realName: result.realName,
+        actor: { requestId: `provision:${result.completed.id}` },
+        actorType: "SYSTEM",
       });
       return {
         ...toResult(result.completed),

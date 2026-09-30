@@ -31,11 +31,12 @@ test("维修状态机只接受任务书规定流转", () => {
   assert.equal(isRepairTransitionAllowed("APPROVED", "DRAFT"), false);
   assert.equal(isRepairTransitionAllowed("DRAFT", "APPROVED"), false);
 });
-test("提交完整性要求日期、分类、正文、结果与至少一张照片", () => {
+test("提交完整性要求日期、时长、分类、正文、结果与至少一张照片", () => {
   assert.throws(
     () =>
       validateSubmission({
         repairDate: null,
+        durationMinutes: null,
         categoryId: null,
         content: null,
         result: null,
@@ -48,6 +49,7 @@ test("提交完整性要求日期、分类、正文、结果与至少一张照�
     () =>
       validateSubmission({
         repairDate: new Date("2026-09-15T00:00:00.000Z"),
+        durationMinutes: 60,
         categoryId: "category",
         content: "   ",
         result: "COMPLETED",
@@ -55,9 +57,42 @@ test("提交完整性要求日期、分类、正文、结果与至少一张照�
       }),
     (e) => e instanceof AppError && e.code === "REPAIR_SUBMISSION_INCOMPLETE",
   );
-  // 其余项齐了、正文有内容即可提交；维修时长不参与提交校验。
+  // 维修时长提交必填（issue #72）：其余项齐了但缺时长要拦下。
+  assert.throws(
+    () =>
+      validateSubmission({
+        repairDate: new Date("2026-09-15T00:00:00.000Z"),
+        durationMinutes: null,
+        categoryId: "category",
+        content: "换硅脂",
+        result: "COMPLETED",
+        photoCount: 1,
+      }),
+    (e) =>
+      e instanceof AppError &&
+      e.code === "REPAIR_SUBMISSION_INCOMPLETE" &&
+      e.fieldErrors?.durationMinutes !== undefined,
+  );
+  // 时长越界与小数同样拒绝：草稿阶段的上下限在提交口径里继续生效。
+  for (const durationMinutes of [0, 10081, 45.5]) {
+    assert.throws(
+      () =>
+        validateSubmission({
+          repairDate: new Date("2026-09-15T00:00:00.000Z"),
+          durationMinutes,
+          categoryId: "category",
+          content: "换硅脂",
+          result: "COMPLETED",
+          photoCount: 1,
+        }),
+      (e) => e instanceof AppError && e.code === "REPAIR_SUBMISSION_INCOMPLETE",
+      `${durationMinutes} 分钟应当被拒绝`,
+    );
+  }
+  // 全部齐备（含时长）即可通过。
   validateSubmission({
     repairDate: new Date("2026-09-15T00:00:00.000Z"),
+    durationMinutes: 45,
     categoryId: "category",
     content: "换硅脂",
     result: "COMPLETED",
@@ -67,6 +102,7 @@ test("提交完整性要求日期、分类、正文、结果与至少一张照�
     () =>
       validateSubmission({
         repairDate: new Date("2026-09-15T00:00:00.000Z"),
+        durationMinutes: 45,
         categoryId: "category",
         content: "字".repeat(10001),
         result: "COMPLETED",

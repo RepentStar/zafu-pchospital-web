@@ -23,7 +23,14 @@ function openDatePicker(event: ReactMouseEvent<HTMLInputElement>) {
   }
 }
 
-export function RepairEditor({ recordId }: { recordId: string }) {
+export function RepairEditor({
+  recordId,
+  allowSaveDraft = true,
+}: {
+  recordId: string;
+  /** 新建流程不再暴露「草稿」（issue #72）：只留提交审核；编辑存量草稿与退回记录仍可保存。 */
+  allowSaveDraft?: boolean;
+}) {
   const router = useRouter();
   const [record, setRecord] = useState<RepairDetailView>();
   const [categories, setCategories] = useState<RepairCategoryView[]>([]);
@@ -79,6 +86,7 @@ export function RepairEditor({ recordId }: { recordId: string }) {
       body: JSON.stringify({
         version: record.version,
         repairDate: record.repairDate,
+        durationMinutes: record.durationMinutes ?? null,
         categoryId: record.category?.id ?? null,
         content: record.content,
         result: record.result ?? defaultRepairResult,
@@ -197,7 +205,7 @@ export function RepairEditor({ recordId }: { recordId: string }) {
     });
     await refreshPhotos();
   }
-  if (state === "loading") return <p role="status">正在加载草稿…</p>;
+  if (state === "loading") return <p role="status">正在加载表单…</p>;
   if (state === "error")
     return (
       <Card variant="notice">
@@ -230,7 +238,8 @@ export function RepairEditor({ recordId }: { recordId: string }) {
           className="gap-s-5 grid"
           onSubmit={(e) => {
             e.preventDefault();
-            void save();
+            // 新建流程没有「保存草稿」，回车不触发隐式保存，避免误以为已提交。
+            if (allowSaveDraft) void save();
           }}
         >
           <div className="gap-s-4 grid items-start md:grid-cols-2">
@@ -270,6 +279,31 @@ export function RepairEditor({ recordId }: { recordId: string }) {
                 ))}
               </select>
             </label>
+            <label className="field">
+              <span className="field__label">
+                维修时长（分钟）
+                <span className="field__req">{repairEditorCopy.requiredMark}</span>
+              </span>
+              <input
+                className="field__input"
+                type="number"
+                inputMode="numeric"
+                step={1}
+                min={repairFieldLimits.durationMinutesMin}
+                max={repairFieldLimits.durationMinutesMax}
+                value={record.durationMinutes ?? ""}
+                onChange={(e) =>
+                  field(
+                    "durationMinutes",
+                    e.target.value === "" ? null : Number.parseInt(e.target.value, 10),
+                  )
+                }
+                aria-describedby="repair-duration-hint"
+              />
+              <span className="field__hint" id="repair-duration-hint">
+                {repairEditorCopy.durationHint}
+              </span>
+            </label>
           </div>
           <label className="field">
             <span className="field__label">
@@ -287,15 +321,19 @@ export function RepairEditor({ recordId }: { recordId: string }) {
               {repairEditorCopy.contentHint}
             </span>
           </label>
-          <p className="field__hint">{repairEditorCopy.requiredNote}</p>
+          <p className="field__hint">
+            {allowSaveDraft ? repairEditorCopy.requiredNote : repairEditorCopy.requiredNoteCreate}
+          </p>
           <p className="field__hint">
             维修结果默认为「{repairResultLabels[defaultRepairResult]}」，保存与提交都会按此记录。
           </p>
           <p className="field__hint">当前版本：{record.version}</p>
           <div className="signup__actions">
-            <Button type="submit" disabled={busy}>
-              保存草稿
-            </Button>
+            {allowSaveDraft ? (
+              <Button type="submit" disabled={busy}>
+                保存草稿
+              </Button>
+            ) : null}
             <Button type="button" variant="solid" disabled={busy} onClick={() => void submit()}>
               提交审核
             </Button>

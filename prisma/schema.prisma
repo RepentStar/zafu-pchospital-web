@@ -425,6 +425,35 @@ model RepairTimelineEvent {
   @@map("repair_timeline_events")
 }
 
+/// 历史修机数据导入的「待认领」暂存（issue #72 评审 1）：导入时姓名尚未在册的行先落在这里，
+/// 等该姓名的新成员注册/建档后自动补录成 APPROVED 记录，保证一份历史数据「只导入一次」。
+/// 与 audit_logs 同理**不建外键**：行的归属成员此刻还不存在，
+/// `claimed_by_profile_id` / `created_record_id` 只是事后追溯用的记录值。
+model RepairHistoryPending {
+  id                 String    @id @db.Char(36)
+  /// 行指纹（与 repair_records.create_request_key 同一套 `history-import:{sha256}`）：
+  /// 认领时直接作为记录的 createRequestKey —— CLI 重跑与自动补录天然去重。
+  fingerprint        String    @unique(map: "repair_history_pending_fingerprint_uq") @db.VarChar(128)
+  /// 用于将来匹配的姓名：一格多人已取第一人，班级前缀已剥离（与导入口径一致）。
+  realName           String    @map("real_name") @db.VarChar(64)
+  repairDate         DateTime  @map("repair_date") @db.Date
+  durationMinutes    Int       @map("duration_minutes")
+  categoryId         String    @map("category_id") @db.Char(36)
+  content            String    @db.Text
+  result             String    @db.VarChar(32)
+  remark             String?   @db.VarChar(2000)
+  sourceFile         String?   @map("source_file") @db.VarChar(255)
+  sourceLine         Int?      @map("source_line")
+  importedByUserId   String?   @map("imported_by_user_id") @db.Char(36)
+  importedAt         DateTime  @map("imported_at") @db.DateTime(3)
+  claimedAt          DateTime? @map("claimed_at") @db.DateTime(3)
+  claimedByProfileId String?   @map("claimed_by_profile_id") @db.Char(36)
+  createdRecordId    String?   @map("created_record_id") @db.Char(36)
+
+  @@index([realName, claimedAt], map: "repair_history_pending_name_claimed_idx")
+  @@map("repair_history_pending")
+}
+
 /// M4 维修记录评论。两层结构：根评论 parentCommentId 为空，回复一律挂到根评论。
 /// 删除走 deletedAt 软删除，正文保留供审计，默认读取排除已删行。
 model RepairComment {

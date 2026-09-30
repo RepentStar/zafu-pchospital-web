@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { PageHead } from "@/components/layout/PageHead";
-import { CreateRepairDraft } from "@/components/repairs/CreateRepairDraft";
+import { CreateRepairForm } from "@/components/repairs/CreateRepairForm";
 import { Section } from "@/components/ui/Section";
 import { repairCopy } from "@/config/repairs";
 import { requireActiveMemberPage } from "@/lib/auth/member-page";
@@ -18,9 +18,9 @@ export default async function NewRepairPage() {
       />
       <Section labelledBy="new-repair-panel">
         <h2 className="sr-only" id="new-repair-panel">
-          创建维修草稿
+          维修记录表单
         </h2>
-        <CreateRepairDraft />
+        <CreateRepairForm />
       </Section>
     </div>
   );

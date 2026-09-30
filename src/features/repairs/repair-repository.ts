@@ -44,4 +44,26 @@ export const repairRepository = {
     if (!record || record.deletedAt) throw new AppError("REPAIR_NOT_FOUND", "维修记录不存在");
     return record;
   },
+  /**
+   * 本人最近一条「空白草稿」：所有业务字段为空、无有效照片、仍是 DRAFT。
+   * 新建页进页面即建档（issue #72），复用空白草稿避免成员反复进出攒下一堆空记录
+   * （PR #73 评审 3）。`result` 建档即写默认值，不作为「空白」判据。
+   */
+  async latestEmptyDraft(memberProfileId: string) {
+    return getDb().repairRecord.findFirst({
+      where: {
+        memberProfileId,
+        status: "DRAFT",
+        deletedAt: null,
+        repairDate: null,
+        durationMinutes: null,
+        categoryId: null,
+        content: null,
+        remark: null,
+        photos: { none: { deletedAt: null } },
+      },
+      orderBy: { createdAt: "desc" },
+      include: repairDetailInclude,
+    });
+  },
 };

@@ -213,23 +213,24 @@ Phase 2 按 M0–M7 分模块实施，状态和依赖见 `docs/phase2-developmen
 corepack enable   # 之后 pnpm 会自动使用 packageManager 里固定的版本
 ```
 
-| 命令                     | 说明                                                             |
-| ------------------------ | ---------------------------------------------------------------- |
-| `pnpm install`           | 安装依赖、生成 Prisma Client，并补占位文档清单                   |
-| `pnpm dev`               | 启动开发服务器（`predev` 同样补清单）                            |
-| `pnpm build`             | 生产构建，**含站内技术文档**（需要 mdBook，见第 7 节）           |
-| `pnpm build:site`        | 只编译官网，跳过文档构建（用当时磁盘上的清单，**不要用于部署**） |
-| `pnpm docs:build`        | 只生成站内技术文档到 `public/handbook/`                          |
-| `pnpm start`             | 以生产模式启动（需先 build）                                     |
-| `pnpm lint`              | `eslint .` + 主题调色板一致性校验，**必须 0 error**              |
-| `pnpm test`              | 单元与 Contract 测试                                             |
-| `pnpm test:db`           | 真实 GreatSQL 集成测试                                           |
-| `pnpm db:migrate:deploy` | 部署版本化 Migration                                             |
-| `pnpm db:seed`           | 幂等基础角色 Seed                                                |
-| `pnpm db:health`         | GreatSQL 连接与运行参数检查                                      |
-| `pnpm check:palette`     | 只跑调色板校验（官网与文档站两份令牌是否逐值一致）               |
-| `pnpm format`            | Prettier 格式化                                                  |
-| `pnpm format:check`      | 检查格式是否符合规范                                             |
+| 命令                         | 说明                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`               | 安装依赖、生成 Prisma Client，并补占位文档清单                                                                |
+| `pnpm dev`                   | 启动开发服务器（`predev` 同样补清单）                                                                         |
+| `pnpm build`                 | 生产构建，**含站内技术文档**（需要 mdBook，见第 7 节）                                                        |
+| `pnpm build:site`            | 只编译官网，跳过文档构建（用当时磁盘上的清单，**不要用于部署**）                                              |
+| `pnpm docs:build`            | 只生成站内技术文档到 `public/handbook/`                                                                       |
+| `pnpm start`                 | 以生产模式启动（需先 build）                                                                                  |
+| `pnpm lint`                  | `eslint .` + 主题调色板一致性校验，**必须 0 error**                                                           |
+| `pnpm test`                  | 单元与 Contract 测试                                                                                          |
+| `pnpm test:db`               | 真实 GreatSQL 集成测试                                                                                        |
+| `pnpm db:migrate:deploy`     | 部署版本化 Migration                                                                                          |
+| `pnpm db:seed`               | 幂等基础角色 Seed                                                                                             |
+| `pnpm db:health`             | GreatSQL 连接与运行参数检查                                                                                   |
+| `pnpm import:repair-history` | 历史修机数据导入（issue #72）：缺省 dry-run，确认后加 `--apply`；见 `tools/import-repair-history.ts` 头部说明 |
+| `pnpm check:palette`         | 只跑调色板校验（官网与文档站两份令牌是否逐值一致）                                                            |
+| `pnpm format`                | Prettier 格式化                                                                                               |
+| `pnpm format:check`          | 检查格式是否符合规范                                                                                          |
 
 > 不要用 npm / yarn，也不要删除 `pnpm-lock.yaml`。
 

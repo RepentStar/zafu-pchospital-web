@@ -17,6 +17,7 @@ import { inSerializableTransaction } from "@/lib/db/transaction";
 import { getDb } from "@/lib/db/client";
 import { normalizePhone, normalizeQq } from "@/lib/security/normalization";
 import { digestInviteCode, generateInviteCode } from "@/lib/security/secrets";
+import { claimHistoryForNewMember } from "@/features/repairs/repair-history-import-service";
 import type {
   AuthorizedActor,
   CreateInviteCodeInput,
@@ -212,7 +213,7 @@ export class InviteCodeService implements InviteCodeServiceContract {
     const qq = normalizeQq(input.qq);
     const phone = normalizePhone(input.phone);
     const digest = digestInviteCode(input.code);
-    return inSerializableTransaction(async (tx) => {
+    const redeemed = await inSerializableTransaction(async (tx) => {
       const replay = await tx.inviteCodeRedemption.findUnique({
         where: { idempotencyKey: input.idempotencyKey },
         include: {
@@ -313,6 +314,17 @@ export class InviteCodeService implements InviteCodeServiceContract {
       });
       return { userId, memberProfileId, redemptionId, provisionId: provision.id };
     });
+    // 注册成功后按姓名补录历史暂存行（issue #72 评审 1）：本人可能「先修过机、后注册」。
+    // 独立事务且内部吞异常 —— 历史数据的问题不能让注册失败；重复请求触发的重放
+    // 也会走到这里，但暂存行已认领过，第二次是空操作。
+    await claimHistoryForNewMember({
+      memberProfileId: redeemed.memberProfileId,
+      realName: input.realName.trim(),
+      actor: context,
+      actorType: "SYSTEM",
+      actorUserId: redeemed.userId,
+    });
+    return redeemed;
   }
 }
 

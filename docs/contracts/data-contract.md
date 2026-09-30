@@ -69,14 +69,34 @@ Repository / Service 的默认读取必须加 `deletedAt: null`。身份采用�
 - `repair_records.member_profile_id` 是唯一业务归属，不保存 QQ、手机号或姓名外键。
 - 状态只允许 `DRAFT → PENDING → APPROVED|REJECTED` 和 `REJECTED → PENDING`。
 - `version` 在记录修改、提交、审核、标记和软删除时递增；成员保存必须提交当前版本。
-- 草稿允许不完整；成员提交时要求业务日期（不早于 2020-01-01、不晚于今天）、启用分类、
-  非空正文（至多 10000 字）和至少一张有效照片。日期范围与正文必填在保存草稿时就开始校验
+- 草稿允许不完整；成员提交时要求业务日期（不早于 2020-01-01、不晚于今天）、维修时长
+  （1–10080 的整数分钟，issue #72 起必填）、启用分类、
+  非空正文（至多 10000 字）和至少一张有效照片。日期范围、时长上下限与正文必填在保存草稿时就开始校验
   （issue #62 后端3），字段上下限集中在 `src/config/repairs.ts` 的 `repairFieldLimits`。
 - 维修结果默认「已完成」：成员端不填写该字段，缺省写入 `COMPLETED`，管理端仍可改成「未完成」。
-  维修时长同样只在管理端维护，不参与成员提交校验。
+  维修时长由成员在填写记录时录入并提交必填（issue #72）；管理端仍可修正异常值。
 - `repair_reviews` 和 `repair_timeline_events` 只追加；退回审核意见必填。
 - 照片数据库只保存元数据与服务端 `storage_key`，文件不在 `public/` 下；照片访问继承维修记录可见性。
 - 分类使用稳定 `code` 幂等 Seed。停用分类不能用于新提交，但历史引用保留。
+- 历史修机数据导入（issue #72，`tools/import-repair-history.ts`）走独立落库通道：按姓名匹配
+  **在册活跃成员**、按名称匹配启用分类，通过后直接落 `APPROVED`（无照片、不走 `repair_reviews`），
+  以 timeline 三条事件与 `repair.history_imported` 审计标注来源 `history_import`。逐行指纹
+  （`create_request_key = history-import:{sha256}`）只含业务字段（成员归属与备注不参与，
+  保证「暂存认领」与「重跑导入」算出同一个键），重复导入同一行只跳过不重复入库。
+- 「先修机、后注册」的行由暂存表 `repair_history_pending` 自动闭环（PR #73 评审 1）：
+  导入时姓名尚未在册、但其余字段有效的行先落暂存（指纹幂等，记来源文件与行号）；
+  该姓名的新成员在**邀请码注册 / 面试通过发放 / 管理端新增**三条建档路径成功后，
+  自动按姓名认领补录 —— 同样直接落 `APPROVED`，timeline 三条事件与 `member.history_claimed`
+  审计标注来源 `history_import_claim`。同名在册成员不止一位时整组不认领（与导入重名口径
+  一致，留人工）。暂存表**不建外键**：归属成员在录入时还不存在，`claimed_by_profile_id` /
+  `created_record_id` 只是事后追溯值；补录失败不影响注册（暂存行保留、重跑导入也能补）。
+  双保险：成员建档后对同一文件重跑 `--apply` 亦可补录，已入库行被指纹跳过。
+- 收集表实况的解析口径（社团确认，issue #72）：成员归属按「**维修人员姓名**」列匹配在册成员——
+  一格多人取第一人、姓名粘连班级号（如「计算机233蔡廷耀」）剥前缀后匹配，两种处理都在备注留痕；
+  日期取「提交时间（自动）」列的日历日；时长为自由文本，按「分钟 / 小时（含半小时、两小时、
+  X小时Y分）/ 纯数字（≤12 按小时、>12 按分钟）」解析，解析不出（如「一次」「十五min」）逐行拒收；
+  分类列缺失时 `--fallback-category` 统一挂兜底分类（`HISTORY_IMPORT`，`--apply` 时自动创建），
+  时长列缺失或为空时 `--default-duration` 按分钟补录——补录值一律写进备注，可事后甄别修正。
 - `device_model` 是选填机型（issue #68，可空 `VarChar(60)`）：活动报名时填写，接待落单时
   **复制**进记录，此后两边独立。只用于展示，不参与统计口径、筛选或校验；手工建单一般为空。
 - 默认业务查询排除 `repair_records.deleted_at IS NOT NULL` 和已软删除照片。
@@ -106,13 +126,14 @@ Repository / Service 的默认读取必须加 `deletedAt: null`。身份采用�
   成功后版本递增；过期版本返回 `MEMBER_PROFILE_VERSION_CONFLICT`。
 - 资料的字段可见性由 `ProfileVisibilityPolicy` 裁剪，分三档：
 
-  | 视图 | 出现场景 | 含 QQ | 含学号/班级 | 含 `userId` |
-  |---|---|---|---|---|
-  | summary | 工作台、列表、公开响应 | 否 | 否 | 否 |
-  | self | 仅 `GET /member/profile` | 是 | 是 | 否 |
-  | internal | 仅 `GET /members/:id/profile` | 是 | 否 | 否 |
+  | 视图     | 出现场景                      | 含 QQ | 含学号/班级 | 含 `userId` |
+  | -------- | ----------------------------- | ----- | ----------- | ----------- |
+  | summary  | 工作台、列表、公开响应        | 否    | 否          | 否          |
+  | self     | 仅 `GET /member/profile`      | 是    | 是          | 否          |
+  | internal | 仅 `GET /members/:id/profile` | 是    | 否          | 否          |
 
   因此 QQ、学号、班级只存在于受保护的单成员详情，绝不进入列表、统计或公开数据。
+
 - 学生身份标识（学号、班级）当前由管理员维护，M3 不提供自助修改入口。
 
 ## M4 内部交流契约

@@ -13,6 +13,19 @@ export function normalizeDraftFields(input: RepairDraftFields): RepairDraftField
   };
 }
 
+/** 建档请求是否完全空白（新建页的 `POST {}`）：空请求可以复用成员已有的空白草稿。 */
+export function isBlankDraftFields(input: RepairDraftFields): boolean {
+  const blank = (value: unknown) => value === undefined || value === null || value === "";
+  return (
+    blank(input.repairDate) &&
+    blank(input.durationMinutes) &&
+    blank(input.categoryId) &&
+    blank(input.content) &&
+    blank(input.result) &&
+    blank(input.remark)
+  );
+}
+
 export function validateDraftFields(input: RepairDraftFields): void {
   const errors: Record<string, string[]> = {};
   if (input.repairDate != null && !isDate(input.repairDate)) {
@@ -43,6 +56,7 @@ export function validateDraftFields(input: RepairDraftFields): void {
 
 export function validateSubmission(record: {
   repairDate: Date | null;
+  durationMinutes: number | null;
   categoryId: string | null;
   content: string | null;
   result: string | null;
@@ -56,6 +70,16 @@ export function validateSubmission(record: {
     else if (repairDate < repairFieldLimits.repairDateMin)
       errors.repairDate = [`维修日期不得早于 ${repairFieldLimits.repairDateMin}`];
   }
+  // 维修时长提交必填（issue #72）：统计口径依赖它，缺了就只能「待补充」。
+  if (record.durationMinutes == null) errors.durationMinutes = ["请填写维修时长"];
+  else if (
+    !Number.isInteger(record.durationMinutes) ||
+    record.durationMinutes < repairFieldLimits.durationMinutesMin ||
+    record.durationMinutes > repairFieldLimits.durationMinutesMax
+  )
+    errors.durationMinutes = [
+      `维修时长须为 ${repairFieldLimits.durationMinutesMin}–${repairFieldLimits.durationMinutesMax} 分钟`,
+    ];
   if (!record.categoryId) errors.categoryId = ["请选择故障分类"];
   const content = record.content?.trim() ?? "";
   if (!content) errors.content = ["请填写维修内容"];

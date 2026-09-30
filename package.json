@@ -25,6 +25,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:health": "tsx tools/db-health.ts",
+    "import:repair-history": "tsx --env-file=.env tools/import-repair-history.ts",
     "test": "tsx --test tests/**/*.test.ts",
     "test:unit": "tsx --test tests/unit/**/*.test.ts",
     "test:db": "tsx --env-file=.env --test --test-concurrency=1 tests/integration/**/*.test.ts"

@@ -54,6 +54,7 @@ before(async () => {
   await db.repairReview.deleteMany();
   await db.repairPhoto.deleteMany();
   await db.repairRecord.deleteMany();
+  await db.repairHistoryPending.deleteMany();
   await db.repairCategory.deleteMany();
   await db.authSession.deleteMany();
   await db.loginThrottle.deleteMany();
@@ -560,6 +561,34 @@ dbTest("M2 草稿、照片、提交、审核、可见性与统计形成闭环", 
     (await listApprovedRepairsForAnalytics()).some((row) => row.id === draft.id),
     false,
   );
+});
+
+// PR #73 评审 3：新建页「进页面即建档」，反复进出不应攒出多个空白草稿。
+dbTest("M2 空白建档请求复用本人最新空白草稿，填写后另建", async () => {
+  const created = await memberService.create(
+    {
+      realName: "空白草稿复用",
+      qq: `8${String(Date.now()).slice(-9)}`,
+      phone: `133${String(Date.now()).slice(-8)}`,
+      idempotencyKey: randomUUID(),
+    },
+    adminActor,
+  );
+  const owner = {
+    actorType: "USER" as const,
+    userId: created.member.userId,
+    userStatus: "ACTIVE" as const,
+    permissions: permissionsForRoles(["MEMBER"]),
+    requestId: "req_m2_blank_reuse",
+  };
+  const first = await repairService.createDraft({ idempotencyKey: randomUUID() }, owner);
+  const replay = await repairService.createDraft({ idempotencyKey: randomUUID() }, owner);
+  assert.equal(replay.id, first.id, "第二次空白建档应复用同一空白草稿");
+  // 已填写内容的草稿不再被视为空白，下一次空白建档应新建记录。
+  const category = await getDb().repairCategory.findUniqueOrThrow({ where: { code: "M2_TEST" } });
+  await repairService.update(first.id, { version: first.version, categoryId: category.id }, owner);
+  const afterFill = await repairService.createDraft({ idempotencyKey: randomUUID() }, owner);
+  assert.notEqual(afterFill.id, first.id, "已有内容的草稿不应被复用");
 });
 
 dbTest("M2 数据库写入失败会补偿删除已写入的文件", async () => {

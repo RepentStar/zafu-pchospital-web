@@ -58,7 +58,7 @@ export const repairCopy = {
   create: {
     title: "新建维修记录",
     label: "New Repair",
-    lead: "先建立草稿，再填写内容、上传照片并提交审核。",
+    lead: "直接填写维修信息并上传照片，提交后进入审核。",
   },
   edit: {
     title: "编辑维修记录",
@@ -100,7 +100,10 @@ export const repairEditorCopy = {
   requiredMark: "必填",
   /** 表单是「先存草稿、再提交」两步，必填只针对提交那一刻。 */
   requiredNote: "标注「必填」的字段在提交审核前必须填齐；草稿可以先保存。",
+  /** 新建流程没有草稿（issue #72），提示改说提交口径。 */
+  requiredNoteCreate: "标注「必填」的字段都已必填；填写完成后点「提交审核」进入管理员审核。",
   dateHint: "默认今天；不得晚于今天。",
+  durationHint: `按实际耗时填写整数分钟，${repairFieldLimits.durationMinutesMin}–${repairFieldLimits.durationMinutesMax} 分钟；提交审核必填。`,
   contentHint: `提交审核时必填，最多 ${repairFieldLimits.contentMaxLength} 字。`,
   /** 照片上限来自服务端（随详情下发），所以文案留占位符而不是写死数字。 */
   photoHint: "支持 JPEG、PNG、WebP；单张不超过 {size}、最多 {count} 张。提交审核至少需要一张。",

@@ -476,7 +476,12 @@ dbTest("M3 工作台只统计本人已通过记录且不计入草稿待审退回
   const today = new Date().toISOString().slice(0, 10);
   await createApprovedRepair(owner, { repairDate: today, durationMinutes: 90 });
   await createApprovedRepair(owner, { repairDate: today, durationMinutes: 30 });
-  await repairService.createDraft({ idempotencyKey: randomUUID() }, owner);
+  // 第一条草稿带上正文内容：空白草稿会被「进页面即建档」的复用逻辑拦下（PR #73 评审 3），
+  // 这里需要「1 条草稿 + 1 条空白草稿（随后转待审）」两条并存的场景。
+  await repairService.createDraft(
+    { idempotencyKey: randomUUID(), content: "工作台草稿正文，等待补充照片后提交。" },
+    owner,
+  );
   const pending = await repairService.createDraft({ idempotencyKey: randomUUID() }, owner);
   const category = await getDb().repairCategory.findUniqueOrThrow({ where: { code: "M3_TEST" } });
   const pendingUpdated = await repairService.update(

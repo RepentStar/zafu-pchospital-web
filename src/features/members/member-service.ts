@@ -9,6 +9,7 @@ import {
 import { movedRowIds } from "@/features/admin/reorder";
 import { memberRepository } from "@/features/members/member-repository";
 import { saveMemberSkills } from "@/features/member-profile/member-profile-service";
+import { claimHistoryForNewMember } from "@/features/repairs/repair-history-import-service";
 import { skillRepository } from "@/features/skills/skill-repository";
 import { toSkillView } from "@/features/skills/skill-service";
 import { AppError } from "@/lib/api/errors";
@@ -148,6 +149,16 @@ export class MemberService implements MemberServiceContract {
         after: { userId, realName: input.realName, qq: input.qq, phone: input.phone },
       });
       return { memberProfileId, passwordCreated };
+    });
+    // 建档成功后在独立事务里补录历史暂存行（issue #72 评审 1）：新成员可能「先修过机、
+    // 才注册」——导入时姓名对不上只能暂存，这里按姓名自动认领，历史数据只导入一次。
+    // 放在创建事务之外：补录失败绝不能连累建档，且失败的暂存行保留、重跑导入也能补。
+    await claimHistoryForNewMember({
+      memberProfileId: member.memberProfileId,
+      realName: input.realName.trim(),
+      actor,
+      actorType: "USER",
+      actorUserId: actor.userId,
     });
     return {
       member: await this.getView(member.memberProfileId),

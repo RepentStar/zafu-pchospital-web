@@ -9,6 +9,7 @@ import { inSerializableTransaction } from "@/lib/db/transaction";
 import { assertCanEditRepair } from "./repair-policy";
 import { repairDetailInclude, repairRepository } from "./repair-repository";
 import {
+  isBlankDraftFields,
   normalizeDraftFields,
   parseRepairDate,
   validateDraftFields,
@@ -35,6 +36,12 @@ export const repairService: RepairServiceContract = {
     }
     const fields = normalizeDraftFields(input);
     validateDraftFields(fields);
+    // 空白建档请求复用本人最新的空白草稿（PR #73 评审 3）：
+    // 新建页「进页面即建档」，成员反复进出不应攒出一串空草稿。
+    if (isBlankDraftFields(fields)) {
+      const reusable = await repairRepository.latestEmptyDraft(member.id);
+      if (reusable) return toRepairView(reusable);
+    }
     const draft = { ...fields, result: fields.result ?? defaultRepairResult };
     const now = new Date();
     const record = await inSerializableTransaction(async (tx) => {
@@ -244,18 +251,32 @@ export async function createSubmittedForActivity(
       createdAt: now,
     },
   });
-  await timeline(tx, recordId, actor.userId, "CREATED", {
-    status: "PENDING",
-    source: "repair_activity_serve",
-    activityId: input.activityId,
-    registrationId: input.registrationId,
-  }, now);
-  await timeline(tx, recordId, actor.userId, "SUBMITTED", {
-    from: "DRAFT",
-    to: "PENDING",
-    source: "repair_activity_serve",
-    idempotencyKey: input.createRequestKey,
-  }, now);
+  await timeline(
+    tx,
+    recordId,
+    actor.userId,
+    "CREATED",
+    {
+      status: "PENDING",
+      source: "repair_activity_serve",
+      activityId: input.activityId,
+      registrationId: input.registrationId,
+    },
+    now,
+  );
+  await timeline(
+    tx,
+    recordId,
+    actor.userId,
+    "SUBMITTED",
+    {
+      from: "DRAFT",
+      to: "PENDING",
+      source: "repair_activity_serve",
+      idempotencyKey: input.createRequestKey,
+    },
+    now,
+  );
   await appendAuditLog(tx, {
     actor,
     actorType: "USER",
