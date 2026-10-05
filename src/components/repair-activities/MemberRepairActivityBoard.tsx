@@ -227,7 +227,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       ) : null}
 
       <div className="activity-board__panes">
-        <Card className="activity-board__pane">
+        <Card className="activity-board__pane repair-panel">
           <header className="activity-board__pane-head">
             <h2>{copy.eligibleTitle}</h2>
             <span className="member-section__tag">{copy.eligibleTag}</span>
@@ -271,7 +271,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
           </div>
         </Card>
 
-        <Card className="activity-board__pane">
+        <Card className="activity-board__pane repair-panel">
           <header className="activity-board__pane-head">
             <h2>{copy.queueTitle}</h2>
             <span className="member-section__tag">{copy.queueTag}</span>
