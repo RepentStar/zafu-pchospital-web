@@ -735,6 +735,8 @@ round 端点）。后台需要新图标时按同样规则补 `Icon.tsx` 的 `sha
 - 活动详情里的报名表单复用 `.signup` / `.field`（同一套表单控件），不另造第二套。
 - 成员活动列表使用 `.member-activity-workspace` 收紧页头留白，与成员维修列表共用内容宽度；
   活动卡复用 `.repair-panel` 内边距。
+- 活动工作台复用 `.member-activity-workspace` 页头和 `.repair-panel` 面板内边距；
+  ≥1100px 双栏，窄屏单栏；队列操作在 <760px 换到下一行，长机型与故障文字可断行。
 
 ---
 

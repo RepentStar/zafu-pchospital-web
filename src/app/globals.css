@@ -7492,6 +7492,7 @@ html[data-theme="black-yellow"] {
 }
 .activity-board {
   display: grid;
+  min-width: 0;
   gap: var(--s-4);
 }
 .activity-board__toolbar {
@@ -7502,20 +7503,21 @@ html[data-theme="black-yellow"] {
 }
 .activity-board__panes {
   display: grid;
+  min-width: 0;
   gap: var(--s-4);
 }
-@media (min-width: 900px) {
+@media (min-width: 1100px) {
   .activity-board__panes {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
   }
 }
 .activity-board__pane-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s-2);
-  margin-bottom: var(--s-3);
 }
 .activity-board__pane-head h2 {
   margin: 0;
@@ -7530,20 +7532,22 @@ html[data-theme="black-yellow"] {
 }
 .activity-board__row {
   display: grid;
+  min-width: 0;
   gap: var(--s-2);
   padding-block: var(--s-2);
-  border-top: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
 }
 .activity-board__row--queue {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
-@media (min-width: 600px) {
+@media (min-width: 760px) {
   .activity-board__row--queue {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
   }
 }
-/* 队列位次（第 N 位）：位次与正文同在一个格子里（<600px 时整行只有一列，
+/* 队列位次（第 N 位）：位次与正文同在一个格子里（<760px 时整行只有一列，
    单独成列会让位次跑到姓名上面一行）。位次列定宽，行与行之间的姓名左边缘
    才对得齐（「第 9 位」与「第 10 位」不参差）；超过两位按内容放宽，不裁切。 */
 .activity-board__queue-main {
@@ -7564,13 +7568,23 @@ html[data-theme="black-yellow"] {
   align-items: flex-start;
   cursor: pointer;
 }
+.activity-board__check > input {
+  flex-shrink: 0;
+  accent-color: var(--accent-deep);
+}
+.activity-board__check > span,
+.activity-board__queue-main > div {
+  min-width: 0;
+}
 .activity-board__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  margin-top: var(--s-4);
+}
+.activity-board__actions > p {
+  margin: 0;
 }
 .activity-board__row-actions {
   display: flex;
