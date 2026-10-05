@@ -7376,6 +7376,12 @@ html[data-theme="black-yellow"] {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* 成员列表是横向滚动容器，外侧描边会被裁切；内描边不改变卡片尺寸。 */
+.member-activity-workspace .activity-card__link:hover .activity-card,
+.member-activity-workspace .activity-card__link:focus-visible .activity-card,
+.member-activity-workspace .activity-card__link:focus-visible {
+  outline-offset: -2px;
+}
 .activity-card {
   display: flex;
   flex-direction: column;
