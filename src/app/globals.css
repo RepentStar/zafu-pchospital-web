@@ -2621,8 +2621,15 @@ html[data-theme="black-yellow"] {
   .repair-workspace {
     padding-block: clamp(1.5rem, 3vw, 2.5rem) var(--s-8);
   }
-  .repair-workspace > .shell {
+  .member-activity-workspace.page-head {
+    padding-block: clamp(1.5rem, 3vw, 2.5rem) var(--s-8);
+  }
+  .repair-workspace > .shell,
+  .member-activity-workspace > .shell {
     max-width: 80rem;
+  }
+  .member-activity-workspace .sec-title {
+    font-size: clamp(2rem, 3vw, 3rem);
   }
   /* 维修子页在成员工作台内，页头和正文共用一条居中的内容轴。 */
   .repair-page .shell {

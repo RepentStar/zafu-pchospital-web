@@ -67,7 +67,7 @@ export function MemberRepairActivityList() {
       {items.map((item) => (
         <li key={item.id}>
           <Link href={`/member/repair-activities/${item.id}`} className="activity-card__link">
-            <Card className="activity-card">
+            <Card className="activity-card repair-panel">
               <div className="activity-card__head">
                 <h2 className="activity-card__title">{item.title}</h2>
                 <span className="admin-tag">
