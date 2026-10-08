@@ -1,20 +1,24 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { formatShanghaiDateTime } from "@/components/repair-activities/activity-format";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { repairStatusLabels } from "@/config/repairs";
 import { memberRepairActivitiesCopy } from "@/config/repair-activities";
 import type {
   StaffBoardView,
   StaffRegistrationView,
+  StaffServeDraft,
 } from "@/features/repair-activities/repair-activity-staff-service";
 
 type Props = { activityId: string };
 
 export function MemberRepairActivityBoard({ activityId }: Props) {
+  const router = useRouter();
   const copy = memberRepairActivitiesCopy.board;
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [board, setBoard] = useState<StaffBoardView | null>(null);
@@ -24,8 +28,10 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [withdrawTarget, setWithdrawTarget] = useState<StaffRegistrationView | null>(null);
   const [checkInConfirmOpen, setCheckInConfirmOpen] = useState(false);
+  /** 全局接单拦截弹层（issue #79 第 6 项）：点击「接待」命中未完成草稿时出现，不发请求。 */
+  const [pendingNotice, setPendingNotice] = useState<StaffServeDraft | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<StaffBoardView | null> => {
     setMessage("");
     try {
       const response = await fetch(`/api/v1/member/repair-activities/${activityId}/board`, {
@@ -39,14 +45,16 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       if (!json.success || !json.data) {
         setState("error");
         setMessage(json.error?.message ?? copy.loadFailed);
-        return;
+        return null;
       }
       setBoard(json.data);
       setSelected(new Set());
       setState("ready");
+      return json.data;
     } catch {
       setState("error");
       setMessage(copy.loadFailed);
+      return null;
     }
   }, [activityId, copy.loadFailed]);
 
@@ -154,11 +162,28 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
     );
     setBusy(null);
     if (!result.ok) {
+      if (result.code === "ACTIVITY_SERVE_DRAFT_PENDING") {
+        // 服务端兜底（多标签 / 并发）：先刷新看板，再按最新的 pendingServeDraft 弹层；
+        // 刷新后若无草稿（例如另一标签已提交），退回内联提示。
+        const fresh = await load();
+        if (fresh?.pendingServeDraft) setPendingNotice(fresh.pendingServeDraft);
+        else setMessage(result.message);
+        return;
+      }
       setMessage(result.message);
       return;
     }
     setToast(copy.serveSuccess);
     await load();
+  }
+
+  /** 点击「接待」：先看客户端已加载的 pendingServeDraft，非空则弹层且**不发请求**。 */
+  function requestServe(registrationId: string) {
+    if (board?.pendingServeDraft) {
+      setPendingNotice(board.pendingServeDraft);
+      return;
+    }
+    void serve(registrationId);
   }
 
   function toggle(id: string) {
@@ -312,7 +337,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
                   <div className="activity-board__row-actions">
                     <Button
                       variant="solid"
-                      onClick={() => void serve(row.id)}
+                      onClick={() => requestServe(row.id)}
                       disabled={opsDisabled}
                     >
                       {busy === `serve:${row.id}` ? copy.serving : copy.serve}
@@ -331,6 +356,50 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
           )}
         </Card>
       </div>
+
+      {/* 「已接待」= 常驻区块（issue #79 第 6 项）：数据为空只换内容，区块本身不出现 / 消失。 */}
+      <Card className="activity-board__pane repair-panel">
+        <header className="activity-board__pane-head">
+          <h2>{copy.servedTitle}</h2>
+          <span className="member-section__tag">{copy.servedTag}</span>
+        </header>
+        {board.served.length === 0 ? (
+          <p className="muted activity-board__empty">{copy.servedEmpty}</p>
+        ) : (
+          <ul className="activity-board__list">
+            {board.served.map((row) => {
+              const recordId = row.repairRecordId;
+              return (
+                <li key={row.id} className="activity-board__row">
+                  <div className="activity-board__queue-main">
+                    <div>
+                      <strong>{row.name}</strong>{" "}
+                      {row.recordStatus ? (
+                        <span className="admin-tag">{repairStatusLabels[row.recordStatus]}</span>
+                      ) : null}
+                      <div className="muted">
+                        {copy.phone} {row.phoneMasked}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="activity-board__row-actions">
+                    {/* 记录缺失或已软删除：占位文案，不出链接。 */}
+                    {!recordId || !row.recordStatus ? (
+                      <span className="muted">{copy.recordMissing}</span>
+                    ) : row.recordStatus === "DRAFT" || row.recordStatus === "REJECTED" ? (
+                      <Button href={`/member/repairs/${recordId}/edit`}>{copy.fillRepair}</Button>
+                    ) : (
+                      <Button variant="ghost" href={`/member/repairs/${recordId}`}>
+                        {copy.viewRepair}
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
 
       {checkInConfirmOpen ? (
         <ConfirmDialog
@@ -372,6 +441,24 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
             <strong>
               {withdrawTarget.name} · {withdrawTarget.phoneMasked}
             </strong>
+          </p>
+        </ConfirmDialog>
+      ) : null}
+
+      {pendingNotice ? (
+        <ConfirmDialog
+          title={copy.pendingServeTitle}
+          cancelLabel={copy.pendingServeDismiss}
+          confirmLabel={copy.pendingServeFill}
+          onClose={() => setPendingNotice(null)}
+          onConfirm={() => {
+            router.push(`/member/repairs/${pendingNotice.repairRecordId}/edit`);
+          }}
+        >
+          <p>
+            {copy.pendingServeBody
+              .replace("{owner}", pendingNotice.ownerName)
+              .replace("{activity}", pendingNotice.activityTitle)}
           </p>
         </ConfirmDialog>
       ) : null}

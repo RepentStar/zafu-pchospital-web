@@ -476,7 +476,7 @@ export const adminCopy = {
     title: "维修审核",
     lead: "查看全部成员提交的维修记录，完成审核、退回、异常数据修正与案例标记。",
     filter: {
-      query: "内容 / 备注 / 成员",
+      query: "机主姓名 / 内容 / 备注 / 成员",
       status: "审核状态",
       result: "维修结果",
       category: "故障分类",
@@ -487,11 +487,13 @@ export const adminCopy = {
       all: "全部",
       submit: "筛选",
       reset: "清除筛选",
-      hint: `关键字在维修内容、备注与成员姓名 / 昵称里按「包含」匹配。${adminShared.filters.note.and}${adminShared.filters.note.dateInclusive}`,
+      hint: `关键字在机主姓名、维修内容、备注与成员姓名 / 昵称里按「包含」匹配。${adminShared.filters.note.and}${adminShared.filters.note.dateInclusive}`,
     },
     table: {
       repairDate: "维修日期",
       member: "成员",
+      ownerName: "机主姓名",
+      ownerPhone: "机主电话",
       category: "故障分类",
       result: "维修结果",
       duration: "维修时长",
@@ -667,14 +669,14 @@ export const adminCopy = {
     title: "数据导出",
     lead: "按与维修列表相同的筛选条件导出记录。图片不嵌入表格，只输出记录 ID 与照片链接。",
     filter: {
-      query: "内容 / 备注 / 成员",
+      query: "机主姓名 / 内容 / 备注 / 成员",
       status: "审核状态",
       result: "维修结果",
       category: "故障分类",
       dateFrom: "起始日期",
       dateTo: "结束日期",
       all: "全部",
-      hint: `关键字在维修内容、备注与成员姓名 / 昵称里按「包含」匹配。${adminShared.filters.note.and}${adminShared.filters.note.dateInclusive}`,
+      hint: `关键字在机主姓名、维修内容、备注与成员姓名 / 昵称里按「包含」匹配。${adminShared.filters.note.and}${adminShared.filters.note.dateInclusive}`,
     },
     format: {
       label: "导出格式",
@@ -697,7 +699,7 @@ export const adminCopy = {
     emptyFiltered: "没有匹配的维修记录，未生成文件。当时生效的筛选条件：{filters}",
     emptyNoFilter: "当前没有任何可导出的维修记录，未生成文件。",
     columns:
-      "导出列：维修日期、维修成员、故障分类、维修结果、维修时长、审核状态、创建时间、记录 ID、维修照片链接。",
+      "导出列：维修日期、维修成员、机主姓名、机主电话、故障分类、维修结果、维修时长、审核状态、创建时间、记录 ID、维修照片链接。",
   },
   /* ------------------------------------------------------------------ 批 2 */
   skills: {

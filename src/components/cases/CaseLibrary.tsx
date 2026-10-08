@@ -229,7 +229,8 @@ export function CaseLibrary() {
 function CaseCard({ item }: { item: RepairView }) {
   const copy = casesCopy;
   const href = `/member/repairs/${item.id}`;
-  const summary = summarize(item.content);
+  // 摘要取值链（issue #79 第 6 项）：备注优先，老记录的维修内容回退。
+  const summary = summarize(item.remark?.trim() || item.content);
   return (
     <li className="community-list__item">
       <div className="community-list__body">
