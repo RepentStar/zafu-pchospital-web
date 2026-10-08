@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function RepairActivitiesPage() {
   return (
-    <>
+    <div className="repair-page">
       <PageHead
         id="repair-activities-page-title"
         index="02"
@@ -23,6 +23,6 @@ export default function RepairActivitiesPage() {
       <Section labelledBy="repair-activities-page-title">
         <RepairActivityList />
       </Section>
-    </>
+    </div>
   );
 }

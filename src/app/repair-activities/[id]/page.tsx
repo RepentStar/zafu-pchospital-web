@@ -17,7 +17,7 @@ export default async function RepairActivityDetailPage({
 }) {
   const { id } = await params;
   return (
-    <>
+    <div className="repair-page">
       <PageHead
         id="repair-activity-detail-head"
         index="02"
@@ -25,9 +25,9 @@ export default async function RepairActivityDetailPage({
         title={repairActivitiesPage.title}
         lead={repairActivitiesPage.lead}
       />
-      <Section labelledBy="repair-activity-detail-title">
+      <Section labelledBy="repair-activity-detail-head">
         <RepairActivityDetail activityId={id} />
       </Section>
-    </>
+    </div>
   );
 }

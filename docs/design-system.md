@@ -733,6 +733,9 @@ round 端点）。后台需要新图标时按同样规则补 `Icon.tsx` 的 `sha
 - 队列位次用 `--t-xs` + `--ink-3` + `tabular-nums`：它是给眼睛定位用的辅助信息，
   不能比姓名更抢眼；定宽取 `minmax(2.5rem, max-content)`，两位数（第 10 位）按内容放宽、不裁切。
 - 活动详情里的报名表单复用 `.signup` / `.field`（同一套表单控件），不另造第二套。
+- 公开活动列表与详情复用 `.repair-page` 收紧页头与正文留白、`.repair-panel` 提供面板内边距；
+  列表 <760px 单列、760–1099px 两列、≥1100px 四列，详情表单 ≥1100px 双栏；
+  长标题和元信息可断行，成功反馈复用 `AdminToast`，不挤动表单。
 - 成员活动列表使用 `.member-activity-workspace` 收紧页头留白，与成员维修列表共用内容宽度；
   活动卡复用 `.repair-panel` 内边距，悬停与键盘焦点描边画在边界内侧，避免被横滑容器裁切。
 - 活动工作台复用 `.member-activity-workspace` 页头和 `.repair-panel` 面板内边距；
