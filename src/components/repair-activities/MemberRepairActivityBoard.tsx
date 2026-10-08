@@ -210,9 +210,6 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       {!board.attended ? (
         <Card className="activity-board__attend-banner" variant="notice">
           <p role="status">{copy.attendPrompt}</p>
-          <Button variant="solid" onClick={() => void attend()} disabled={busy !== null}>
-            {busy === "attend" ? copy.attending : copy.attendCta}
-          </Button>
         </Card>
       ) : null}
       {message ? (
