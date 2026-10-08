@@ -7,6 +7,7 @@ import {
 } from "@/features/repair-activities/edit-token";
 import { maskActivityPhone } from "@/features/repair-activities/phone-mask";
 import {
+  activityEndExclusive,
   assertActivityTimeRules,
   assertValidCapacity,
   assertValidDeviceModel,
@@ -239,7 +240,7 @@ export const repairActivityService = {
       if (!activity || activity.deletedAt) {
         throw new AppError("ACTIVITY_NOT_FOUND", "活动不存在");
       }
-      if (new Date().getTime() >= activity.activityAt.getTime()) {
+      if (new Date().getTime() >= activityEndExclusive(activity.activityAt).getTime()) {
         throw new AppError("ACTIVITY_ENDED", "活动已结束");
       }
       const before = await tx.repairActivityRegistration.findFirst({
@@ -610,7 +611,7 @@ export const repairActivityService = {
     });
     if (!activity) throw new AppError("ACTIVITY_NOT_FOUND", "活动不存在");
     const now = new Date();
-    if (now.getTime() >= activity.activityAt.getTime()) {
+    if (now.getTime() >= activityEndExclusive(activity.activityAt).getTime()) {
       throw new AppError("ACTIVITY_ENDED", "活动已结束");
     }
     const reg = await getDb().repairActivityRegistration.findFirst({

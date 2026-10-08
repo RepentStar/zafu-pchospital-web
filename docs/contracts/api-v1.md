@@ -456,4 +456,14 @@ DELETE /api/v1/member/notifications/:id
   按 OPEN → UPCOMING → FULL / CLOSED 分档，同档内 `activityAt` 升序，`ENDED` 不进预览；
   公开列表仍按方案 B 的 `activityAt` 排序（口径见 `docs/specs/ux-r3-tech-plan.md`）。
 
+### 活动「已结束」的判定口径（issue #79）
+
+- `ENDED`（已结束）= 活动当天（`activityAt` 所在的 Asia/Shanghai 自然日）**结束之后**，
+  即次日 00:00（上海）起；活动当天（含 23:59）仍按报名窗口判定 —— 通常为 `CLOSED`，
+  当天仍可改故障类型。此前「`now >= activityAt` 即结束」的口径会让活动当天显示「已结束」。
+- 判定只由 `activityEndExclusive()` / `deriveRepairActivityStatus()` 一处实现
+  （`src/features/repair-activities/repair-activity-validation.ts`）；
+  管理端改报名与手机号查询（lookup）用同一助手直接比较，公开详情 `getPublic` 的
+  `ACTIVITY_ENDED` 拦截走派生状态自动跟随。
+
 新增错误码：无（`SKILL_INACTIVE` 与 `SKILL_CODE_CONFLICT` 已分别在 M3、M6 批次 2 登记）。
