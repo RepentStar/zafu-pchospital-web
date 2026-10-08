@@ -2,6 +2,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { AdminToast, type AdminToastMessage } from "@/components/admin/AdminToast";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import {
@@ -26,10 +27,13 @@ function openDatePicker(event: ReactMouseEvent<HTMLInputElement>) {
 export function RepairEditor({
   recordId,
   allowSaveDraft = true,
+  returnActivityId,
 }: {
   recordId: string;
   /** 新建流程不再暴露「草稿」（issue #72）：只留提交审核；编辑存量草稿与退回记录仍可保存。 */
   allowSaveDraft?: boolean;
+  /** 从活动看板进入时，提交成功后返回该看板继续接待。 */
+  returnActivityId?: string;
 }) {
   const router = useRouter();
   const [record, setRecord] = useState<RepairDetailView>();
@@ -37,6 +41,15 @@ export function RepairEditor({
   const [state, setState] = useState<"loading" | "ready" | "error" | "forbidden">("loading");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [toast, setToast] = useState<AdminToastMessage | null>(null);
+  useEffect(() => {
+    if (!submitted || !returnActivityId) return;
+    const timer = setTimeout(() => {
+      router.replace(`/member/repair-activities/${encodeURIComponent(returnActivityId)}`);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [submitted, returnActivityId, router]);
   const load = useCallback(async () => {
     setState("loading");
     try {
@@ -102,6 +115,7 @@ export function RepairEditor({
     return json.data as RepairDetailView;
   }
   async function save() {
+    if (busy) return;
     setBusy(true);
     setMessage("");
     try {
@@ -114,6 +128,7 @@ export function RepairEditor({
     }
   }
   async function submit() {
+    if (busy) return;
     setBusy(true);
     setMessage("");
     try {
@@ -131,7 +146,12 @@ export function RepairEditor({
           : "";
         throw new Error(fields || json.error.message);
       }
-      router.replace(`/member/repairs/${recordId}`);
+      if (returnActivityId) {
+        setToast({ text: repairEditorCopy.activitySubmitSuccess, tone: "success" });
+        setSubmitted(true);
+      } else {
+        router.replace(`/member/repairs/${recordId}`);
+      }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "提交失败");
       setBusy(false);
@@ -231,6 +251,7 @@ export function RepairEditor({
     .replace("{count}", String(record.photoLimits.maxFiles));
   return (
     <div className="repair-editor">
+      <AdminToast toast={toast} onDismiss={() => setToast(null)} />
       {rejection ? (
         <Card variant="notice">
           <strong>最新退回原因</strong>

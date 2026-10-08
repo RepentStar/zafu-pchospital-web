@@ -99,6 +99,7 @@ export const repairFieldLimits = {
   repairDateMin: "2020-01-01",
 } as const;
 export const repairEditorCopy = {
+  activitySubmitSuccess: "提交成功，一秒后返回活动页面。",
   requiredMark: "必填",
   /** 表单是「先存草稿、再提交」两步，必填只针对提交那一刻。 */
   requiredNote: "标注「必填」的字段在提交审核前必须填齐；草稿可以先保存。",
