@@ -468,6 +468,13 @@ DELETE /api/v1/member/notifications/:id
 
 新增错误码：无（`SKILL_INACTIVE` 与 `SKILL_CODE_CONFLICT` 已分别在 M3、M6 批次 2 登记）。
 
+### 成员出勤、签到与接待的报名截止闸门
+
+- `attendance`、`check-in`、`serve` 仅在 `now >= signupClosesAt` 时开放；报名未开始、报名中、
+  提前报满均不可操作，返回 409 `ACTIVITY_NOT_OPEN`。已有出勤或排队记录也不能绕过此校验。
+- 服务端在事务中锁定活动并读取最新截止时间；看板禁用相应按钮与签到勾选，保留列表可查看。
+- 撤回排队仍沿用原有权限、出勤与报名状态校验，允许修正历史误签到。
+
 ### 接待落草稿与机主字段（issue #79 第 6 项）
 
 **serve 行为变更**：

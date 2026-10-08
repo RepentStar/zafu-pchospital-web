@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@/generated/prisma/client";
 
 import { maskActivityPhone } from "@/features/repair-activities/phone-mask";
 import {
   canCheckInRegistration,
+  assertActivityStaffOpen,
   canServeRegistration,
   canWithdrawRegistration,
   deriveRepairActivityStatus,
@@ -130,6 +132,17 @@ async function loadActivityOrThrow(activityId: string) {
     where: { id: activityId, deletedAt: null },
   });
   if (!activity) throw new AppError("ACTIVITY_NOT_FOUND", "活动不存在");
+  return activity;
+}
+
+/** 锁定活动后读取最新报名截止时间，避免管理端改期与接待台写操作竞态。 */
+async function requireStaffOpen(tx: Prisma.TransactionClient, activityId: string) {
+  await tx.$queryRaw`SELECT id FROM repair_activities WHERE id = ${activityId} FOR UPDATE`;
+  const activity = await tx.repairActivity.findFirst({
+    where: { id: activityId, deletedAt: null },
+  });
+  if (!activity) throw new AppError("ACTIVITY_NOT_FOUND", "活动不存在");
+  assertActivityStaffOpen(activity.signupClosesAt);
   return activity;
 }
 
@@ -263,6 +276,7 @@ export const repairActivityStaffService = {
     await loadActivityOrThrow(activityId);
 
     return inSerializableTransaction(async (tx) => {
+      await requireStaffOpen(tx, activityId);
       const existing = await tx.repairActivityAttendance.findUnique({
         where: {
           activityId_memberProfileId: { activityId, memberProfileId: member.id },
@@ -370,7 +384,7 @@ export const repairActivityStaffService = {
     }
 
     return inSerializableTransaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM repair_activities WHERE id = ${activityId} FOR UPDATE`;
+      await requireStaffOpen(tx, activityId);
       const now = new Date();
       const checkedIn: StaffRegistrationView[] = [];
 
@@ -466,14 +480,14 @@ export const repairActivityStaffService = {
     actor: AuthorizedActor,
   ): Promise<ServeResultView> {
     const member = await requireStaffMember(actor);
-    const activity = await loadActivityOrThrow(activityId);
+    await loadActivityOrThrow(activityId);
     await requireAttendance(activityId, member.id);
     if (!registrationId.trim()) {
       throw new AppError("VALIDATION_FAILED", "报名 ID 无效");
     }
 
     return inSerializableTransaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM repair_activities WHERE id = ${activityId} FOR UPDATE`;
+      const activity = await requireStaffOpen(tx, activityId);
       const reg = await tx.repairActivityRegistration.findFirst({
         where: { id: registrationId, activityId, deletedAt: null },
       });

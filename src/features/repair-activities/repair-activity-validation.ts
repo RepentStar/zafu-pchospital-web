@@ -120,6 +120,17 @@ export function canAcceptNewRegistration(status: RepairActivityStatus): boolean 
   return status === "OPEN";
 }
 
+/** 报名截止后才开放成员出勤、客户签到与接待；报满不代表报名截止。 */
+export function canOperateActivityStaff(signupClosesAt: Date | string, now = new Date()): boolean {
+  return now.getTime() >= new Date(signupClosesAt).getTime();
+}
+
+export function assertActivityStaffOpen(signupClosesAt: Date, now = new Date()): void {
+  if (!canOperateActivityStaff(signupClosesAt, now)) {
+    throw new AppError("ACTIVITY_NOT_OPEN", "报名尚未截止，暂不可出勤、签到或接待");
+  }
+}
+
 /**
  * 公开改类型：仅 REGISTERED 且活动未 ENDED。
  * 报名截止后、活动开始前仍可改。
