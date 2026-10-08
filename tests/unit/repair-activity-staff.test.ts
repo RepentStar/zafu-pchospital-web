@@ -2,9 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  ACTIVITY_SERVE_DURATION_MINUTES,
-  ACTIVITY_SERVE_REMARK,
-  buildActivityServeContent,
   canCheckInRegistration,
   canServeRegistration,
   canWithdrawRegistration,
@@ -61,19 +58,10 @@ test("出勤闸门语义：未出勤操作码为 ACTIVITY_ATTENDANCE_REQUIRED（
   assert.equal(defaultStatusFor("ACTIVITY_REGISTRATION_STATE_INVALID"), 409);
 });
 
-test("落单内容模板含活动标题、姓名、脱敏电话、故障类型", () => {
-  const content = buildActivityServeContent({
-    activityTitle: "秋季义诊",
-    customerName: "张三",
-    phoneMasked: "138****5678",
-    issueTypeLabel: "清灰换硅脂",
-  });
-  assert.match(content, /秋季义诊/);
-  assert.match(content, /张三/);
-  assert.match(content, /138\*\*\*\*5678/);
-  assert.match(content, /清灰换硅脂/);
-  assert.equal(ACTIVITY_SERVE_DURATION_MINUTES, 1);
-  assert.equal(ACTIVITY_SERVE_REMARK, "活动接待自动落单");
+test("全局接单拦截错误码 ACTIVITY_SERVE_DRAFT_PENDING（409）", async () => {
+  const { ApiErrorCode, defaultStatusFor } = await importErrorStatus();
+  assert.ok((ApiErrorCode as readonly string[]).includes("ACTIVITY_SERVE_DRAFT_PENDING"));
+  assert.equal(defaultStatusFor("ACTIVITY_SERVE_DRAFT_PENDING"), 409);
 });
 
 test("activityAt 转上海日历日", () => {

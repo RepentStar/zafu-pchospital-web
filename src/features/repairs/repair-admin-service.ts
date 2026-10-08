@@ -38,7 +38,8 @@ export const repairAdminService: RepairAdminServiceContract = {
     const before = await repairRepository.getById(recordId);
     const changed =
       before.isDifficult !== input.isDifficult || before.isTypical !== input.isTypical;
-    if (!changed) return toRepairView(before);
+    if (!changed)
+      return toRepairView(before, { canViewOwnerPhone: actor.permissions.includes("repair:review") });
     const now = new Date();
     const updated = await inSerializableTransaction(async (tx) => {
       await tx.repairRecord.update({
@@ -66,7 +67,7 @@ export const repairAdminService: RepairAdminServiceContract = {
         include: repairDetailInclude,
       });
     });
-    return toRepairView(updated);
+    return toRepairView(updated, { canViewOwnerPhone: actor.permissions.includes("repair:review") });
   },
 
   async updateRecord(recordId, input, actor) {
@@ -123,7 +124,7 @@ export const repairAdminService: RepairAdminServiceContract = {
         include: repairDetailInclude,
       });
     });
-    return toRepairView(updated);
+    return toRepairView(updated, { canViewOwnerPhone: true });
   },
 
   /**

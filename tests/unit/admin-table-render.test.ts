@@ -519,6 +519,8 @@ function repair(overrides: Partial<RepairView> = {}): RepairView {
       isActive: true,
     },
     deviceModel: null,
+    ownerName: "李雷",
+    ownerPhone: null,
     content: "重装系统",
     result: "COMPLETED",
     remark: null,

@@ -122,6 +122,8 @@ export function RepairAdminActions({
           repairDate: data.repairDate || null,
           durationMinutes: data.durationMinutes === "" ? null : Number(data.durationMinutes),
           categoryId: data.categoryId || null,
+          ownerName: data.ownerName || null,
+          ownerPhone: data.ownerPhone || null,
           content: data.content || null,
           result: data.result || null,
           remark: data.remark || null,
@@ -314,6 +316,27 @@ export function RepairAdminActions({
               min={repairFieldLimits.repairDateMin}
               max={shanghaiToday()}
               defaultValue={record.repairDate ?? ""}
+            />
+          </label>
+          <label className="field">
+            <span className="field__label">{copy.table.ownerName}</span>
+            <input
+              className="field__input"
+              type="text"
+              name="ownerName"
+              maxLength={repairFieldLimits.ownerNameMaxLength}
+              defaultValue={record.ownerName ?? ""}
+            />
+          </label>
+          <label className="field">
+            <span className="field__label">{copy.table.ownerPhone}</span>
+            <input
+              className="field__input"
+              type="tel"
+              inputMode="numeric"
+              name="ownerPhone"
+              maxLength={11}
+              defaultValue={record.ownerPhone ?? ""}
             />
           </label>
           <label className="field">

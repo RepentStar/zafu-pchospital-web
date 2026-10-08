@@ -78,6 +78,16 @@ export function RepairDetail({ recordId, statusLabels, resultLabels, timelineLab
             <dt className="text-ink-3 text-sm">维修成员</dt>
             <dd>{record.member.name}</dd>
           </div>
+          {/* 机主（客户）：老记录没有该信息则不占一行；完整电话只有本人与审核管理员可见。 */}
+          {record.ownerName || record.ownerPhone ? (
+            <div>
+              <dt className="text-ink-3 text-sm">机主</dt>
+              <dd>
+                {record.ownerName ?? "待补充"}
+                {record.ownerPhone ? ` · ${record.ownerPhone}` : ""}
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt className="text-ink-3 text-sm">维修日期</dt>
             <dd>{record.repairDate ?? "待补充"}</dd>
@@ -125,14 +135,22 @@ export function RepairDetail({ recordId, statusLabels, resultLabels, timelineLab
           />
         ) : null}
       </Card>
-      <Card className="repair-panel">
-        <h2 className="text-display-3 font-bold">维修内容</h2>
-        <p className="text-ink-2 whitespace-pre-wrap">{record.content ?? "待补充"}</p>
-      </Card>
+      {/* 「维修内容」已从表单退场（issue #79 第 6 项）：老记录有值才渲染，新记录不再出现该块。 */}
+      {record.content ? (
+        <Card className="repair-panel">
+          <h2 className="text-display-3 font-bold">维修内容</h2>
+          <p className="text-ink-2 whitespace-pre-wrap">{record.content}</p>
+        </Card>
+      ) : null}
       <Card className="repair-panel">
         <h2 className="text-display-3 font-bold">维修结果</h2>
         <p>{record.result ? resultLabels[record.result] : "待补充"}</p>
-        {record.remark ? <p className="text-ink-2 whitespace-pre-wrap">{record.remark}</p> : null}
+        {record.remark ? (
+          <div>
+            <h3 className="text-ink-3 text-sm">备注</h3>
+            <p className="text-ink-2 whitespace-pre-wrap">{record.remark}</p>
+          </div>
+        ) : null}
       </Card>
       <Card className="repair-panel">
         <h2 className="text-display-3 font-bold">维修照片</h2>

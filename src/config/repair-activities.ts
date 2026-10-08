@@ -114,7 +114,7 @@ export const memberRepairActivitiesCopy = {
     selectNone: "请先勾选至少一条报名。",
     serve: "接待落单",
     serving: "落单中…",
-    serveSuccess: "接待完成，已生成维修单。",
+    serveSuccess: "接待完成，请填写维修记录。",
     withdraw: "撤回",
     withdrawing: "撤回中…",
     withdrawSuccess: "已撤回排队。",
@@ -129,5 +129,20 @@ export const memberRepairActivitiesCopy = {
     name: "姓名",
     checkedInAt: "入队时间",
     viewRepair: "查看维修单",
+    /** 「已接待」区块（issue #79 第 6 项）：常驻区块，数据空了只换内容不卸载。 */
+    servedTitle: "已接待",
+    servedTag: "Served",
+    servedEmpty: "本场还没有已接待的客户。",
+    fillRepair: "填写维修记录",
+    recordMissing: "维修单状态未知，请刷新后再看。",
+    /**
+     * 全局接单拦截（issue #79 第 6 项）：存在未提交的接待草稿时不能接单，
+     * 客户端先行拦截（不发请求），服务端以 `ACTIVITY_SERVE_DRAFT_PENDING` 兜底。
+     */
+    pendingServeTitle: "有未完成的接待记录",
+    pendingServeBody:
+      "机主「{owner}」（{activity}）的维修记录还没有填写提交。请先完成这条记录，再接待下一位客户。",
+    pendingServeFill: "去填写",
+    pendingServeDismiss: "知道了",
   },
 } as const;

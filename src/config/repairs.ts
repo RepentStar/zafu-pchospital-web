@@ -15,7 +15,7 @@ export const repairCopy = {
     },
     filters: {
       searchLabel: "搜索维修记录",
-      searchPlaceholder: "搜索维修内容、备注或成员",
+      searchPlaceholder: "搜索机主姓名、备注或成员",
       status: "状态",
       category: "分类",
       member: "维修成员",
@@ -36,7 +36,7 @@ export const repairCopy = {
     columns: {
       date: "日期",
       category: "分类",
-      content: "维修内容",
+      content: "备注",
       member: "维修成员",
       result: "结果",
       status: "状态",
@@ -46,7 +46,7 @@ export const repairCopy = {
     loadError: "维修记录加载失败，请稍后重试。",
     reload: "重新加载",
     uncategorized: "未分类",
-    missingContent: "尚未填写维修内容",
+    missingContent: "尚未填写备注",
     missingDate: "日期待填",
     missingResult: "结果待填",
     difficult: "疑难",
@@ -91,6 +91,8 @@ export const repairResultLabels: Record<(typeof RepairResult)[number], string> =
 export const repairFieldLimits = {
   contentMaxLength: 10000,
   remarkMaxLength: 2000,
+  /** 机主姓名上限，与 `owner_name` 的 VarChar(40) 对齐。 */
+  ownerNameMaxLength: 40,
   durationMinutesMin: 1,
   durationMinutesMax: 10080,
   /** 维修日期下限：早于它的基本是年份打错（1026 年、202 年这类）。 */
@@ -103,10 +105,17 @@ export const repairEditorCopy = {
   /** 新建流程没有草稿（issue #72），提示改说提交口径。 */
   requiredNoteCreate: "标注「必填」的字段都已必填；填写完成后点「提交审核」进入管理员审核。",
   dateHint: "默认今天；不得晚于今天。",
+  ownerNameLabel: "机主姓名",
+  ownerNameHint: "机主即送修设备的同学；请填写真实姓名，便于核对与回访。",
+  ownerPhoneLabel: "机主电话",
+  ownerPhoneHint: "11 位中国大陆手机号；完整号码仅本人与审核管理员可见。",
   durationHint: `按实际耗时填写整数分钟，${repairFieldLimits.durationMinutesMin}–${repairFieldLimits.durationMinutesMax} 分钟；提交审核必填。`,
-  contentHint: `提交审核时必填，最多 ${repairFieldLimits.contentMaxLength} 字。`,
+  remarkLabel: "备注",
+  remarkHint: `选填，最多 ${repairFieldLimits.remarkMaxLength} 字。备注会展示在案例库摘要中，请勿填写机主电话等敏感信息。`,
+  /** 「备注 + 照片」合并块：照片从提交必填降级为选填附件（issue #79 第 6 项）。 */
+  attachmentsTitle: "备注与附件",
   /** 照片上限来自服务端（随详情下发），所以文案留占位符而不是写死数字。 */
-  photoHint: "支持 JPEG、PNG、WebP；单张不超过 {size}、最多 {count} 张。提交审核至少需要一张。",
+  photoHint: "支持 JPEG、PNG、WebP；单张不超过 {size}、最多 {count} 张。选填，可稍后补充。",
   photoTooLarge: "「{name}」有 {size}，超过单张 {limit} 的上限，请压缩或换一张。",
   photoTooMany: "已上传 {count} 张，最多只能再传 {remain} 张。",
 };

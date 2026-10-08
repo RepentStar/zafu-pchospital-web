@@ -32,7 +32,7 @@ export const repairService: RepairServiceContract = {
     if (existing) {
       if (existing.memberProfileId !== member.id)
         throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已被使用");
-      return toRepairView(existing);
+      return toRepairView(existing, { canViewOwnerPhone: true });
     }
     const fields = normalizeDraftFields(input);
     validateDraftFields(fields);
@@ -40,7 +40,7 @@ export const repairService: RepairServiceContract = {
     // 新建页「进页面即建档」，成员反复进出不应攒出一串空草稿。
     if (isBlankDraftFields(fields)) {
       const reusable = await repairRepository.latestEmptyDraft(member.id);
-      if (reusable) return toRepairView(reusable);
+      if (reusable) return toRepairView(reusable, { canViewOwnerPhone: true });
     }
     const draft = { ...fields, result: fields.result ?? defaultRepairResult };
     const now = new Date();
@@ -62,7 +62,7 @@ export const repairService: RepairServiceContract = {
         include: repairDetailInclude,
       });
     });
-    return toRepairView(record);
+    return toRepairView(record, { canViewOwnerPhone: true });
   },
 
   async update(recordId, input, actor) {
@@ -86,7 +86,7 @@ export const repairService: RepairServiceContract = {
         include: repairDetailInclude,
       });
     });
-    return toRepairView(updated);
+    return toRepairView(updated, { canViewOwnerPhone: true });
   },
 
   async submit(recordId, input, actor) {
@@ -97,7 +97,8 @@ export const repairService: RepairServiceContract = {
       const summary = event.summary as { idempotencyKey?: unknown } | null;
       return summary?.idempotencyKey === input.idempotencyKey;
     });
-    if (record.status === "PENDING" && retry) return toRepairView(record);
+    if (record.status === "PENDING" && retry)
+      return toRepairView(record, { canViewOwnerPhone: true });
     assertCanEditRepair(actor, record);
     if (record.version !== input.version)
       throw new AppError("REPAIR_VERSION_CONFLICT", "记录已被更新，请刷新后重试");
@@ -110,7 +111,7 @@ export const repairService: RepairServiceContract = {
       : null;
     if (record.categoryId && (!category || !category.isActive))
       throw new AppError("REPAIR_CATEGORY_INACTIVE", "所选分类已停用");
-    validateSubmission({ ...record, photoCount: record.photos.length });
+    validateSubmission(record);
     const from = record.status;
     assertRepairTransition(from as "DRAFT" | "REJECTED", "PENDING");
     const now = new Date();
@@ -133,7 +134,7 @@ export const repairService: RepairServiceContract = {
         include: repairDetailInclude,
       });
     });
-    return toRepairView(updated);
+    return toRepairView(updated, { canViewOwnerPhone: true });
   },
 
   async softDelete(recordId, reason, actor) {
@@ -170,6 +171,8 @@ export function dataFields(input: RepairDraftFields) {
     repairDate: parseRepairDate(input.repairDate),
     durationMinutes: input.durationMinutes,
     categoryId: input.categoryId,
+    ownerName: input.ownerName,
+    ownerPhone: input.ownerPhone,
     content: input.content,
     result: input.result,
     remark: input.remark,
@@ -198,26 +201,30 @@ export async function timeline(
 
 /**
  * 活动接待内部落单通道（仅供维修活动 serve 在同一可序列化事务内调用）。
- * 跳过照片必填；仍写 timeline（CREATED + SUBMITTED）与审计；直接落 PENDING。
+ *
+ * 生成 **DRAFT**（issue #79 第 6 项）：预填机主（姓名 / 电话）与日期 / 分类 / 机型，
+ * 正文、时长、备注全部留空，由成员在表单里补齐后自行提交；只写 CREATED 时间线，
+ * 不写 SUBMITTED、不置 `submittedAt`。来源痕留在时间线 summary 与审计里。
  */
-export type CreateSubmittedForActivityInput = {
+export type CreateServeDraftForActivityInput = {
   memberProfileId: string;
-  categoryId: string;
+  /** 分类映射结果；映射不到 / 已停用时为 null，由成员在表单里补选，接待动作本身必须成功。 */
+  categoryId: string | null;
   repairDate: string; // YYYY-MM-DD（上海日历日）
-  content: string;
-  remark: string;
-  durationMinutes: number;
+  ownerName: string;
+  /** 完整 11 位；可见性收口在视图层（`toRepairView` 的 `canViewOwnerPhone`），不在这里掩码。 */
+  ownerPhone: string;
   /** 报名时选填的机型（issue #68）；没填传 null。 */
   deviceModel: string | null;
-  /** 幂等键；建议 `activity-serve:{registrationId}` */
+  /** 幂等键；固定 `activity-serve:{registrationId}` */
   createRequestKey: string;
   registrationId: string;
   activityId: string;
 };
 
-export async function createSubmittedForActivity(
+export async function createServeDraftForActivity(
   tx: Prisma.TransactionClient,
-  input: CreateSubmittedForActivityInput,
+  input: CreateServeDraftForActivityInput,
   actor: import("@/types/contracts").AuthorizedActor,
   now: Date,
 ): Promise<{ repairRecordId: string }> {
@@ -238,16 +245,19 @@ export async function createSubmittedForActivity(
     data: {
       id: recordId,
       memberProfileId: input.memberProfileId,
-      status: "PENDING",
+      status: "DRAFT",
       createRequestKey: input.createRequestKey,
       repairDate,
-      durationMinutes: input.durationMinutes,
       categoryId: input.categoryId,
       deviceModel: input.deviceModel,
-      content: input.content,
+      ownerName: input.ownerName,
+      ownerPhone: input.ownerPhone,
+      // 正文 / 时长 / 备注留空：模板正文、「1 分钟」占位与「活动接待自动落单」备注是旧流程
+      // 的产物，改造后由成员在表单里补齐（issue #79 第 6 项）。
+      content: null,
+      durationMinutes: null,
+      remark: null,
       result: defaultRepairResult,
-      remark: input.remark,
-      submittedAt: now,
       createdAt: now,
     },
   });
@@ -257,23 +267,10 @@ export async function createSubmittedForActivity(
     actor.userId,
     "CREATED",
     {
-      status: "PENDING",
+      status: "DRAFT",
       source: "repair_activity_serve",
       activityId: input.activityId,
       registrationId: input.registrationId,
-    },
-    now,
-  );
-  await timeline(
-    tx,
-    recordId,
-    actor.userId,
-    "SUBMITTED",
-    {
-      from: "DRAFT",
-      to: "PENDING",
-      source: "repair_activity_serve",
-      idempotencyKey: input.createRequestKey,
     },
     now,
   );
@@ -289,7 +286,7 @@ export async function createSubmittedForActivity(
       activityId: input.activityId,
       registrationId: input.registrationId,
       categoryId: input.categoryId,
-      status: "PENDING",
+      status: "DRAFT",
     },
   });
   return { repairRecordId: recordId };

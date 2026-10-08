@@ -440,7 +440,10 @@ function RepairRow({
       </td>
       <td data-label={copy.columns.category}>{item.category?.name ?? copy.uncategorized}</td>
       <td data-label={copy.columns.content} className="repair-table__content">
-        <Link href={`/member/repairs/${item.id}`}>{item.content || copy.missingContent}</Link>
+        {/* 摘要取值链（issue #79 第 6 项）：备注优先，老记录的维修内容回退。 */}
+        <Link href={`/member/repairs/${item.id}`}>
+          {item.remark?.trim() || item.content || copy.missingContent}
+        </Link>
         {item.isDifficult || item.isTypical ? (
           <span className="repair-table__flags">
             {[item.isDifficult ? copy.difficult : "", item.isTypical ? copy.typical : ""]

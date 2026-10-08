@@ -346,6 +346,9 @@ model RepairRecord {
   categoryId       String?               @map("category_id") @db.Char(36)
   /// 机型（issue #68）：活动报名时的选填字段，接待落单时带进记录；手工建单一般为空。
   deviceModel      String?               @map("device_model") @db.VarChar(60)
+  /// 机主（客户）姓名/电话：接待落单自动带自报名；手工建单由成员填写；旧数据为 NULL。
+  ownerName        String?               @map("owner_name") @db.VarChar(40)
+  ownerPhone       String?               @map("owner_phone") @db.VarChar(11)
   content          String?               @db.Text
   result           String?               @db.VarChar(32)
   remark           String?               @db.VarChar(2000)

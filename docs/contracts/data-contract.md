@@ -73,9 +73,11 @@ Repository / Service 的默认读取必须加 `deletedAt: null`。身份采用�
 - 状态只允许 `DRAFT → PENDING → APPROVED|REJECTED` 和 `REJECTED → PENDING`。
 - `version` 在记录修改、提交、审核、标记和软删除时递增；成员保存必须提交当前版本。
 - 草稿允许不完整；成员提交时要求业务日期（不早于 2020-01-01、不晚于今天）、维修时长
-  （1–10080 的整数分钟，issue #72 起必填）、启用分类、
-  非空正文（至多 10000 字）和至少一张有效照片。日期范围、时长上下限与正文必填在保存草稿时就开始校验
-  （issue #62 后端3），字段上下限集中在 `src/config/repairs.ts` 的 `repairFieldLimits`。
+  （1–10080 的整数分钟，issue #72 起必填）、启用分类、机主姓名与机主电话
+  （issue #79 第 6 项：`ownerPhone` 必须是 11 位大陆手机号）。**维修内容与照片不再是提交门槛**
+  （照片降级为「备注与附件」里的选填附件，正文可从表单退场）；日期范围、时长上下限与电话格式
+  在保存草稿时就开始校验（issue #62 后端3），字段上下限集中在 `src/config/repairs.ts` 的
+  `repairFieldLimits`。`content` 的长度上限校验保留（管理员仍可修正历史正文）。
 - 维修结果默认「已完成」：成员端不填写该字段，缺省写入 `COMPLETED`，管理端仍可改成「未完成」。
   维修时长由成员在填写记录时录入并提交必填（issue #72）；管理端仍可修正异常值。
 - `repair_reviews` 和 `repair_timeline_events` 只追加；退回审核意见必填。
@@ -107,6 +109,14 @@ Repository / Service 的默认读取必须加 `deletedAt: null`。身份采用�
   时长列缺失或为空时 `--default-duration` 按分钟补录——补录值一律写进备注，可事后甄别修正。
 - `device_model` 是选填机型（issue #68，可空 `VarChar(60)`）：活动报名时填写，接待落单时
   **复制**进记录，此后两边独立。只用于展示，不参与统计口径、筛选或校验；手工建单一般为空。
+- 机主两列（issue #79 第 6 项，Migration `20261008000000_repair_record_owner`，纯增量）：
+  `owner_name`（可空 `VarChar(40)`）与 `owner_phone`（可空 `VarChar(11)`，存储剔除非数字字符后的
+  11 位）。来源：接待落单自动带自报名，手工建单由成员填写；**历史数据不回填**（导入工具未映射
+  「机主」列，旧数据也没有该信息），旧记录两列为 `NULL`。可见性口径：`ownerName` 在成员区
+  全站可见；`ownerPhone` 完整号仅记录归属人与 `repair:review` 持有者可读，其余情形由视图层
+  下发 `null`（`toRepairView` 的 `canViewOwnerPhone` 默认 `false`，fail-closed），导出
+  （`data:export`，有审计）原样输出。接待落单（`serve`）生成的是 **DRAFT** 草稿并把报名上的
+  机主信息带进记录，成员补齐后自行提交。
 - 默认业务查询排除 `repair_records.deleted_at IS NOT NULL` 和已软删除照片。
 - 后续所有正式统计必须统一使用 `status = APPROVED AND deleted_at IS NULL`。查询条件的代码事实来源为
   `approvedRepairWhere()`；M2 分析入口 `listApprovedRepairsForAnalytics()` 与 M3 成员摘要均在其上追加范围条件。

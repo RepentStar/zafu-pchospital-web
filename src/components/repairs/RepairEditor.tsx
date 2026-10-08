@@ -88,7 +88,11 @@ export function RepairEditor({
         repairDate: record.repairDate,
         durationMinutes: record.durationMinutes ?? null,
         categoryId: record.category?.id ?? null,
-        content: record.content,
+        ownerName: record.ownerName,
+        ownerPhone: record.ownerPhone,
+        // 不再发送 `content`：字段已从表单退场，`undefined` 即「不动」——
+        // 老记录的正文不会被这里清空（issue #79 第 6 项）。
+        remark: record.remark,
         result: record.result ?? defaultRepairResult,
       }),
     });
@@ -261,6 +265,23 @@ export function RepairEditor({
             </label>
             <label className="field">
               <span className="field__label">
+                {repairEditorCopy.ownerNameLabel}
+                <span className="field__req">{repairEditorCopy.requiredMark}</span>
+              </span>
+              <input
+                className="field__input"
+                type="text"
+                maxLength={repairFieldLimits.ownerNameMaxLength}
+                value={record.ownerName ?? ""}
+                onChange={(e) => field("ownerName", e.target.value || null)}
+                aria-describedby="repair-owner-name-hint"
+              />
+              <span className="field__hint" id="repair-owner-name-hint">
+                {repairEditorCopy.ownerNameHint}
+              </span>
+            </label>
+            <label className="field">
+              <span className="field__label">
                 故障分类
                 <span className="field__req">{repairEditorCopy.requiredMark}</span>
               </span>
@@ -304,23 +325,25 @@ export function RepairEditor({
                 {repairEditorCopy.durationHint}
               </span>
             </label>
+            <label className="field">
+              <span className="field__label">
+                {repairEditorCopy.ownerPhoneLabel}
+                <span className="field__req">{repairEditorCopy.requiredMark}</span>
+              </span>
+              <input
+                className="field__input"
+                type="tel"
+                inputMode="numeric"
+                maxLength={11}
+                value={record.ownerPhone ?? ""}
+                onChange={(e) => field("ownerPhone", e.target.value || null)}
+                aria-describedby="repair-owner-phone-hint"
+              />
+              <span className="field__hint" id="repair-owner-phone-hint">
+                {repairEditorCopy.ownerPhoneHint}
+              </span>
+            </label>
           </div>
-          <label className="field">
-            <span className="field__label">
-              维修内容
-              <span className="field__req">{repairEditorCopy.requiredMark}</span>
-            </span>
-            <textarea
-              className="field__input min-h-40"
-              maxLength={repairFieldLimits.contentMaxLength}
-              value={record.content ?? ""}
-              onChange={(e) => field("content", e.target.value)}
-              aria-describedby="repair-content-hint"
-            />
-            <span className="field__hint" id="repair-content-hint">
-              {repairEditorCopy.contentHint}
-            </span>
-          </label>
           <p className="field__hint">
             {allowSaveDraft ? repairEditorCopy.requiredNote : repairEditorCopy.requiredNoteCreate}
           </p>
@@ -347,9 +370,21 @@ export function RepairEditor({
       </Card>
       <Card className="repair-panel">
         <div>
-          <h2 className="text-display-3 font-bold">维修照片</h2>
-          <p className="text-ink-3">{photoHint}</p>
+          <h2 className="text-display-3 font-bold">{repairEditorCopy.attachmentsTitle}</h2>
         </div>
+        <label className="field">
+          <span className="field__label">{repairEditorCopy.remarkLabel}</span>
+          <textarea
+            className="field__input min-h-40"
+            maxLength={repairFieldLimits.remarkMaxLength}
+            value={record.remark ?? ""}
+            onChange={(e) => field("remark", e.target.value || null)}
+            aria-describedby="repair-remark-hint"
+          />
+          <span className="field__hint" id="repair-remark-hint">
+            {repairEditorCopy.remarkHint}
+          </span>
+        </label>
         <label className="field">
           <span className="field__label">选择照片</span>
           <input
@@ -366,6 +401,7 @@ export function RepairEditor({
               void upload(files);
             }}
           />
+          <span className="field__hint">{photoHint}</span>
         </label>
         <div className="gap-s-4 grid md:grid-cols-2">
           {record.photos.map((photo, index) => (

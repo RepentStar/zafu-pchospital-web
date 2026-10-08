@@ -191,6 +191,8 @@ async function draftRepair(owner: AuthorizedActor) {
       repairDate: new Date().toISOString().slice(0, 10),
       durationMinutes: 30,
       categoryId: CATEGORY_ID,
+      ownerName: "M6 集成机主",
+      ownerPhone: "13800138005",
       content: "M6 集成测试维修记录正文内容，用于覆盖管理端审核与导出。",
       result: "COMPLETED",
     },
@@ -198,7 +200,7 @@ async function draftRepair(owner: AuthorizedActor) {
   );
 }
 
-/** 建一条 PENDING（已提交待审核）的维修记录。M2 要求提交前至少一张照片。 */
+/** 建一条 PENDING（已提交待审核）的维修记录。照片现在是选填附件（issue #79 第 6 项）。 */
 async function pendingRepair(owner: AuthorizedActor) {
   const updated = await draftRepair(owner);
   const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);

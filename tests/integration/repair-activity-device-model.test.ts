@@ -203,6 +203,24 @@ async function registerCheckInAndServe(input: {
   return { registrationId, repairRecordId: served.repairRecordId };
 }
 
+/**
+ * 软删除本文件产生的落单草稿。
+ *
+ * 接待落单现在生成 DRAFT（issue #79 第 6 项），未提交的草稿会触发全局接单拦截 ——
+ * 同一文件里连续接待第二位客户前必须先清掉上一条草稿。
+ */
+async function discardServeDrafts(): Promise<void> {
+  await getDb().repairRecord.updateMany({
+    where: {
+      memberProfileId: STAFF_PROFILE_ID,
+      createRequestKey: { startsWith: "activity-serve:" },
+      status: "DRAFT",
+      deletedAt: null,
+    },
+    data: { deletedAt: new Date() },
+  });
+}
+
 before(async () => {
   if (!enabled) return;
   // 报名路由按 IP 限流 10 次/分钟：本文件所有请求都来自同一个 "unknown" IP 桶，
@@ -310,7 +328,12 @@ dbTest("接待落单把机型复制进维修记录", async () => {
 
   const record = await getDb().repairRecord.findUniqueOrThrow({ where: { id: repairRecordId } });
   assert.equal(record.deviceModel, "ThinkPad X1 Carbon");
-  assert.equal(record.status, "PENDING");
+  // 接待落单改为生成草稿（issue #79 第 6 项）：正文 / 时长留空，由成员在表单里补齐。
+  assert.equal(record.status, "DRAFT");
+  assert.equal(record.content, null);
+  assert.equal(record.durationMinutes, null);
+  assert.equal(record.ownerName, "REG68 己");
+  assert.equal(record.ownerPhone, "13900000016");
 
   const registration = await getDb().repairActivityRegistration.findUniqueOrThrow({
     where: { id: registrationId },
@@ -321,6 +344,8 @@ dbTest("接待落单把机型复制进维修记录", async () => {
 });
 
 dbTest("报名没填机型时，落单记录里也是 null", async () => {
+  // 上一条用例留下的接待草稿会触发全局接单拦截（issue #79 第 6 项）：先软删除再接待。
+  await discardServeDrafts();
   const { repairRecordId } = await registerCheckInAndServe({
     name: "REG68 庚",
     phone: "13900000017",

@@ -262,21 +262,3 @@ export function activityEndExclusive(activityAt: Date): Date {
   // Date.UTC 自动处理 day + 1 的跨月 / 跨年进位；再减上海固定偏移得到 UTC 时刻。
   return new Date(Date.UTC(year, month - 1, day + 1) - SHANGHAI_OFFSET_MS);
 }
-
-/** 活动接待自动落单的维修内容模板。 */
-export function buildActivityServeContent(input: {
-  activityTitle: string;
-  customerName: string;
-  phoneMasked: string;
-  issueTypeLabel: string;
-}): string {
-  return [
-    `【维修活动接待】${input.activityTitle}`,
-    `客户：${input.customerName}`,
-    `电话：${input.phoneMasked}`,
-    `故障类型：${input.issueTypeLabel}`,
-  ].join("\n");
-}
-
-export const ACTIVITY_SERVE_REMARK = "活动接待自动落单";
-export const ACTIVITY_SERVE_DURATION_MINUTES = 1;

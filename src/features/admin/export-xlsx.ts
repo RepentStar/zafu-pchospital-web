@@ -7,6 +7,8 @@ import type { RepairExportRow } from "@/types/contracts";
 const COLUMN_WIDTHS: Record<(typeof EXPORT_COLUMNS)[number]["key"], number> = {
   repairDate: 14,
   memberName: 16,
+  ownerName: 16,
+  ownerPhone: 14,
   categoryName: 18,
   result: 12,
   durationMinutes: 12,
@@ -69,7 +71,8 @@ export async function toXlsx(
     sheetName,
     columns: EXPORT_COLUMNS,
     widths: COLUMN_WIDTHS,
-    // 文本列：记录 ID 与照片 URL 一律按文本写入，避免被 Excel 重写成数值或链接。
-    textColumns: ["repairRecordId", "photoUrls"],
+    // 文本列：记录 ID、机主电话与照片 URL 一律按文本写入，
+    // 避免被 Excel 重写成数值（丢前导 0 / 变科学计数法）或链接。
+    textColumns: ["repairRecordId", "ownerPhone", "photoUrls"],
   });
 }

@@ -5,7 +5,15 @@ import type { AuthorizedActor, RepairDetailView, RepairView } from "@/types/cont
 
 type RecordRow = Prisma.RepairRecordGetPayload<{ include: typeof repairDetailInclude }>;
 
-export function toRepairView(record: RecordRow): RepairView {
+/**
+ * `ownerPhone` 的可见性按 fail-closed 处理：默认不下发完整号码（也不下发掩码值，
+ * 值为 `null`）—— 只有归属人与 `repair:review` 持有者由调用方显式放行。
+ * `ownerName` 在成员区内全站可见，不参与收口。
+ */
+export function toRepairView(
+  record: RecordRow,
+  options: { canViewOwnerPhone?: boolean } = {},
+): RepairView {
   const name =
     record.memberProfile.nickname ||
     record.memberProfile.realName ||
@@ -27,6 +35,8 @@ export function toRepairView(record: RecordRow): RepairView {
         }
       : null,
     deviceModel: record.deviceModel,
+    ownerName: record.ownerName,
+    ownerPhone: options.canViewOwnerPhone === true ? record.ownerPhone : null,
     content: record.content,
     result: record.result as RepairView["result"],
     remark: record.remark,
@@ -57,7 +67,9 @@ export function toRepairDetail(
 ): RepairDetailView {
   const owner = record.memberProfile.userId === actor.userId;
   return {
-    ...toRepairView(record),
+    ...toRepairView(record, {
+      canViewOwnerPhone: owner || actor.permissions.includes("repair:review"),
+    }),
     canEdit: owner && (record.status === "DRAFT" || record.status === "REJECTED"),
     canReview: actor.permissions.includes("repair:review") && record.status === "PENDING",
     canFlag: actor.permissions.includes("repair:flag"),

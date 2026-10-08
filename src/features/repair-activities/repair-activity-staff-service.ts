@@ -2,9 +2,6 @@ import { randomUUID } from "node:crypto";
 
 import { maskActivityPhone } from "@/features/repair-activities/phone-mask";
 import {
-  ACTIVITY_SERVE_DURATION_MINUTES,
-  ACTIVITY_SERVE_REMARK,
-  buildActivityServeContent,
   canCheckInRegistration,
   canServeRegistration,
   canWithdrawRegistration,
@@ -19,14 +16,14 @@ import {
   type RepairActivityStatus,
   assertValidIssueType,
 } from "@/features/repair-activities/repair-activity-validation";
-import { createSubmittedForActivity } from "@/features/repairs/repair-service";
+import { createServeDraftForActivity } from "@/features/repairs/repair-service";
 import { repairRepository } from "@/features/repairs/repair-repository";
 import { AppError } from "@/lib/api/errors";
 import { appendAuditLog } from "@/lib/audit/audit-service";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
 import { inSerializableTransaction } from "@/lib/db/transaction";
-import type { AuthorizedActor } from "@/types/contracts";
+import type { AuthorizedActor, RepairStatus } from "@/types/contracts";
 
 export type StaffActivityListItem = {
   id: string;
@@ -57,6 +54,18 @@ export type StaffRegistrationView = {
   createdAt: string;
 };
 
+/** 已接待行：报名视图 + 对应维修单状态（`null` = 记录缺失或已软删除）。 */
+export type StaffServedRow = StaffRegistrationView & {
+  recordStatus: RepairStatus | null;
+};
+
+/** 未提交的接待草稿：看板弹层与全局接单拦截共用（issue #79 第 6 项）。 */
+export type StaffServeDraft = {
+  repairRecordId: string;
+  ownerName: string;
+  activityTitle: string;
+};
+
 export type StaffBoardView = {
   activity: StaffActivityListItem;
   attended: boolean;
@@ -65,6 +74,10 @@ export type StaffBoardView = {
   eligible: StaffRegistrationView[];
   /** 右侧：排队（CHECKED_IN，按 checkedInAt ASC） */
   queue: StaffRegistrationView[];
+  /** 本场已接待（按 servedAt 倒序）；常驻区块的数据来源。 */
+  served: StaffServedRow[];
+  /** 全局拦截：本成员存在未提交的接待草稿时非 null，供点击「接待」时直接弹提示。 */
+  pendingServeDraft: StaffServeDraft | null;
 };
 
 export type ServeResultView = {
@@ -139,6 +152,43 @@ async function countEffective(activityId: string): Promise<number> {
   return getDb().repairActivityRegistration.count({
     where: { activityId, ...effectiveStatusFilter },
   });
+}
+
+/**
+ * 「未完成的接待草稿」判据（issue #79 第 6 项，看板与 serve 拦截共用）。
+ *
+ * 命中条件：记录归属本人、`status = DRAFT`、未软删除，且由报名接待产生
+ * （反向关系 `activityRegistration` 非空）。手工草稿与已软删除草稿都不算，
+ * `PENDING` / `REJECTED` 也不拦截。
+ */
+function pendingServeDraftWhere(memberProfileId: string) {
+  return {
+    memberProfileId,
+    status: "DRAFT" as const,
+    deletedAt: null,
+    activityRegistration: { isNot: null },
+  };
+}
+
+async function findPendingServeDraft(memberProfileId: string): Promise<StaffServeDraft | null> {
+  const draft = await getDb().repairRecord.findFirst({
+    where: pendingServeDraftWhere(memberProfileId),
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    select: {
+      id: true,
+      ownerName: true,
+      activityRegistration: {
+        select: { name: true, activity: { select: { title: true } } },
+      },
+    },
+  });
+  if (!draft) return null;
+  return {
+    repairRecordId: draft.id,
+    // 接待草稿按定义必有 ownerName；回退到报名姓名与「客户」只为类型兜底。
+    ownerName: draft.ownerName ?? draft.activityRegistration?.name ?? "客户",
+    activityTitle: draft.activityRegistration?.activity.title ?? "",
+  };
 }
 
 function toListItem(
@@ -248,21 +298,27 @@ export const repairActivityStaffService = {
     const member = await requireStaffMember(actor);
     const activity = await loadActivityOrThrow(activityId);
     const now = new Date();
-    const [registeredCount, attendance, registrations] = await Promise.all([
-      countEffective(activityId),
-      getDb().repairActivityAttendance.findUnique({
-        where: {
-          activityId_memberProfileId: { activityId, memberProfileId: member.id },
-        },
-      }),
-      getDb().repairActivityRegistration.findMany({
-        where: {
-          activityId,
-          deletedAt: null,
-          status: { in: ["REGISTERED", "CHECKED_IN"] },
-        },
-      }),
-    ]);
+    const [registeredCount, attendance, registrations, servedRows, pendingDraft] =
+      await Promise.all([
+        countEffective(activityId),
+        getDb().repairActivityAttendance.findUnique({
+          where: {
+            activityId_memberProfileId: { activityId, memberProfileId: member.id },
+          },
+        }),
+        getDb().repairActivityRegistration.findMany({
+          where: {
+            activityId,
+            deletedAt: null,
+            status: { in: ["REGISTERED", "CHECKED_IN"] },
+          },
+        }),
+        getDb().repairActivityRegistration.findMany({
+          where: { activityId, deletedAt: null, status: "SERVED" },
+          include: { repairRecord: { select: { id: true, status: true, deletedAt: true } } },
+        }),
+        findPendingServeDraft(member.id),
+      ]);
 
     const eligible = registrations
       .filter((r) => r.status === "REGISTERED")
@@ -273,12 +329,24 @@ export const repairActivityStaffService = {
       registrations.filter((r) => r.status === "CHECKED_IN"),
     ).map(toStaffReg);
 
+    const served: StaffServedRow[] = servedRows
+      .sort((a, b) => (b.servedAt?.getTime() ?? 0) - (a.servedAt?.getTime() ?? 0))
+      .map((row) => ({
+        ...toStaffReg(row),
+        recordStatus:
+          row.repairRecord && !row.repairRecord.deletedAt
+            ? (row.repairRecord.status as RepairStatus)
+            : null,
+      }));
+
     return {
       activity: toListItem(activity, registeredCount, Boolean(attendance), now),
       attended: Boolean(attendance),
       attendanceCheckedInAt: attendance?.checkedInAt.toISOString() ?? null,
       eligible,
       queue,
+      served,
+      pendingServeDraft: pendingDraft,
     };
   },
 
@@ -416,38 +484,45 @@ export const repairActivityStaffService = {
         throw new AppError("ACTIVITY_REGISTRATION_STATE_INVALID", "仅排队中的报名可接待落单");
       }
 
+      // 全局拦截（issue #79 第 6 项）：本成员存在未提交的接待草稿时，任何活动都不能再接单。
+      // 客户端已先行拦截（不发请求），这里是并发 / 多标签下的服务端兜底。
+      const pending = await tx.repairRecord.findFirst({
+        where: pendingServeDraftWhere(member.id),
+        select: {
+          ownerName: true,
+          activityRegistration: { select: { name: true } },
+        },
+      });
+      if (pending) {
+        const customer = pending.ownerName ?? pending.activityRegistration?.name ?? "客户";
+        throw new AppError(
+          "ACTIVITY_SERVE_DRAFT_PENDING",
+          `有未完成的接待记录（机主「${customer}」），请先填写并提交后再接待下一位。`,
+        );
+      }
+
+      // 分类映射失败降级（issue #79 第 6 项）：映射不到 / 已停用时置空，
+      // 由成员在表单里补选 —— 接待动作本身必须成功。
       const issueType = assertValidIssueType(reg.issueType);
       const categoryCode = mapIssueTypeToCategoryCode(issueType);
       const category = await tx.repairCategory.findFirst({
         where: { code: categoryCode, deletedAt: null, isActive: true },
+        select: { id: true },
       });
-      if (!category) {
-        throw new AppError("ACTIVITY_CATEGORY_MISSING", `故障分类 ${categoryCode} 未配置或已停用`);
-      }
 
       const now = new Date();
-      const phoneMasked = maskActivityPhone(reg.phone);
-      const content = buildActivityServeContent({
-        activityTitle: activity.title,
-        customerName: reg.name,
-        phoneMasked,
-        issueTypeLabel: repairActivityIssueTypeLabels[issueType],
-      });
-      const repairDate = shanghaiCalendarDay(activity.activityAt);
-      const createRequestKey = `activity-serve:${registrationId}`;
-
-      const { repairRecordId } = await createSubmittedForActivity(
+      const { repairRecordId } = await createServeDraftForActivity(
         tx,
         {
           memberProfileId: member.id,
-          categoryId: category.id,
-          repairDate,
-          content,
-          remark: ACTIVITY_SERVE_REMARK,
-          durationMinutes: ACTIVITY_SERVE_DURATION_MINUTES,
+          categoryId: category?.id ?? null,
+          repairDate: shanghaiCalendarDay(activity.activityAt),
+          // 机主姓名 / 电话完整带自报名（可见性收口在视图层，不在这里掩码）。
+          ownerName: reg.name,
+          ownerPhone: reg.phone,
           // 报名时填的机型随记录带过去（issue #68）；没填就是 null。
           deviceModel: reg.deviceModel,
-          createRequestKey,
+          createRequestKey: `activity-serve:${registrationId}`,
           registrationId,
           activityId,
         },

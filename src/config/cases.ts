@@ -43,7 +43,7 @@ export const casesCopy = {
 
   /** 卡片字段缺失时的占位 */
   uncategorized: "未分类",
-  missingContent: "尚未填写维修内容",
+  missingContent: "尚未填写备注",
   durationLabel: "耗时",
 
   detailAction: "查看详情",
