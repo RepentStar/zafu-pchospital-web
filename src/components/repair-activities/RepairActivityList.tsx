@@ -102,7 +102,7 @@ export function RepairActivityList() {
                   className={`muted${ended ? "" : "activity-card__footer-slot"}`}
                   aria-hidden={ended ? undefined : true}
                 >
-                  {repairActivitiesPage.endedHint}
+                  {ended ? repairActivitiesPage.endedHint : "\u00a0"}
                 </p>
               </div>
             </Card>
