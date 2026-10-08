@@ -130,6 +130,10 @@ M6 批次 2 的其余能力（技能标签库 CRUD、评论管理、邀请码列
 - `20260928120000_repair_activity_device_model`：报名表与 `repair_records` 各加一列
   `device_model VARCHAR(60) NULL`（issue #68）。报名时选填，接待落单时复制进维修记录；
   历史报名与手工建单没有这个信息。不建外键、不建索引 —— 它只用于展示。
+- `20261008000000_repair_record_owner`：`repair_records` 加 `owner_name VARCHAR(40) NULL` 与
+  `owner_phone VARCHAR(11) NULL`（issue #79 第 6 项）。接待落单自动带自报名，手工建单由成员
+  填写；历史记录不回填，保持 `NULL`（旧数据没有该信息）。不建外键；可见性收口在视图层
+  （`ownerPhone` 仅归属人与 `repair:review` 可读），详见 `docs/contracts/data-contract.md`。
 
 完整字段与状态语义见 `docs/contracts/data-contract.md`。
 

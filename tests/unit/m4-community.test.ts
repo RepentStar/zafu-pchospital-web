@@ -191,9 +191,13 @@ test("成员展示名与摘要截断按昵称/实名/账号名回退", () => {
     { id: "m1", name: "小林" },
   );
   assert.equal(memberRef({ id: "m2", nickname: null, realName: "林晓" }).name, "林晓");
-  assert.equal(excerptText("短内容"), "短内容");
-  assert.equal(excerptText("字".repeat(61)).endsWith("…"), true);
-  assert.equal([...excerptText("字".repeat(61))].length, 61);
+  // 摘要取值链（issue #79 第 6 项）：备注优先，老记录的维修内容回退，双空占位「未填写备注」。
+  assert.equal(excerptText({ remark: "备注内容", content: "老正文" }), "备注内容");
+  assert.equal(excerptText({ remark: "  ", content: "老正文" }), "老正文");
+  assert.equal(excerptText({ remark: null, content: null }), "未填写备注");
+  assert.equal(excerptText({ remark: "短内容", content: null }), "短内容");
+  assert.equal(excerptText({ remark: "字".repeat(61), content: null }).endsWith("…"), true);
+  assert.equal([...excerptText({ remark: "字".repeat(61), content: null })].length, 61);
 });
 
 test("M5 接入后文案不再声称排行未接入，且不出现内部里程碑编号", () => {

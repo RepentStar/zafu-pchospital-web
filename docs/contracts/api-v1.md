@@ -467,3 +467,43 @@ DELETE /api/v1/member/notifications/:id
   `ACTIVITY_ENDED` 拦截走派生状态自动跟随。
 
 新增错误码：无（`SKILL_INACTIVE` 与 `SKILL_CODE_CONFLICT` 已分别在 M3、M6 批次 2 登记）。
+
+### 接待落草稿与机主字段（issue #79 第 6 项）
+
+**serve 行为变更**：
+
+- `POST /api/v1/member/repair-activities/:id/serve` 不再直接落 `PENDING`，改为生成 **`DRAFT`**
+  草稿：预填维修日期（活动当天）、机主姓名 / 电话（完整取自报名）、故障分类（由故障类型映射，
+  映射不到或已停用时**置空** —— 不再抛 `ACTIVITY_CATEGORY_MISSING`，接待动作本身必须成功）、
+  机型（报名选填）；`content` / `durationMinutes` / `remark` 一律为 `null`，由成员在表单里补齐。
+  时间线只写 `CREATED`（summary 带 `source: "repair_activity_serve"`、`registrationId`、
+  `activityId`），审计 `repair.created_from_activity_serve` 保留，
+  `createRequestKey = activity-serve:<registrationId>` 的幂等语义保留。
+- **全局拦截**：本成员存在「报名接待产生、`status = DRAFT` 且未软删除」的记录时，
+  **任何活动**的 serve 都返回 409 `ACTIVITY_SERVE_DRAFT_PENDING`（消息含客户姓名）；
+  软删除的草稿、`PENDING` / `REJECTED` 记录与手工草稿（非接待产生）都不拦截。
+- 看板 `GET /api/v1/member/repair-activities/:id/board` 返回结构新增：
+  - `served: StaffServedRow[]` —— 本场 `SERVED` 报名（按 `servedAt` 倒序），
+    每行在 `StaffRegistrationView` 上追加 `recordStatus: RepairStatus | null`
+    （`null` = 记录缺失或已软删除）；
+  - `pendingServeDraft: { repairRecordId, ownerName, activityTitle } | null` —— 全局拦截的
+    客户端先行判据（客户端据此弹层且**不发 serve 请求**；服务端 409 为并发兜底）。
+
+**机主字段与新列**：
+
+- `PATCH /api/v1/repairs/:id` 与管理端 `PATCH /api/v1/admin/repairs/:id` 的字段集增加
+  `ownerName` / `ownerPhone`（`ownerName` ≤ 40 字；`ownerPhone` 非空时必须是 11 位大陆手机号，
+  存储口径为剔除非数字字符后的 11 位）。提交审核（`POST /api/v1/repairs/:id/submit`）必填
+  机主姓名与电话；**维修内容与照片不再是提交门槛**（照片降级为选填附件），
+  `content` 的长度上限校验仍保留（管理员修正历史正文）。
+- 可见性：`RepairView.ownerName` 在成员区全站可见；`RepairView.ownerPhone` **仅**记录归属人
+  本人与持有 `repair:review` 权限者能拿到完整号，其他情形一律为 `null`（不下发掩码值）。
+  实现为 `toRepairView(record, { canViewOwnerPhone })`，默认 `false`（fail-closed）；
+  `toRepairDetail` 按「归属人 || `repair:review`」传参。
+- 列表搜索（`query`）增加机主姓名匹配；**机主电话不参与搜索**。
+- 导出列新增「机主姓名 / 机主电话」，位置在「维修成员」之后；导出限 `data:export` 且已有审计，
+  不做掩码。
+- 摘要取值链（列表 / 案例库 / 通知 / 成员摘要）：`remark` 优先 → 老记录的 `content` 回退 →
+  占位「未填写备注」。
+
+新增错误码：`ACTIVITY_SERVE_DRAFT_PENDING`(409)。

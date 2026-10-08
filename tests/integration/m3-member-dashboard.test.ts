@@ -193,13 +193,14 @@ async function createApprovedRepair(
       repairDate: options.repairDate,
       durationMinutes: options.durationMinutes,
       categoryId: category.id,
-      // 提交校验要求正文 ≥ 10 字（按 trim 后长度计）。
+      ownerName: "M3 集成机主",
+      ownerPhone: "13800138002",
       content: "M3 集成测试维修记录正文内容，用于覆盖统计与摘要。",
       result: "COMPLETED",
     },
     owner,
   );
-  // 提交校验要求 photoCount ≥ 1：必须先上传至少一张照片。
+  // 照片是选填附件（issue #79 第 6 项）：这里仍上传一张，顺带覆盖照片路径。
   const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
   await repairPhotoService.upload(
     draft.id,
@@ -491,7 +492,8 @@ dbTest("M3 工作台只统计本人已通过记录且不计入草稿待审退回
       repairDate: today,
       durationMinutes: 15,
       categoryId: category.id,
-      // 提交校验要求正文 ≥ 10 字，且至少一张照片。
+      ownerName: "M3 待审机主",
+      ownerPhone: "13800138003",
       content: "待审核维修记录正文内容，长度满足提交校验下限。",
       result: "COMPLETED",
     },
