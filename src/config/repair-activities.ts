@@ -94,6 +94,7 @@ export const memberRepairActivitiesCopy = {
     attendSuccess: "已标记本场出勤。",
     attendRequired: "请先点击「参加本场」标记出勤，才能签到客户或接待。",
     attendPrompt: "你尚未参加本场。先标记出勤后，才能在左侧勾选报名并签到。",
+    signupNotClosed: "报名尚未截止，暂不可出勤、签到或接待。",
     attendedBadge: "你已出勤",
     eligibleTitle: "待签到",
     eligibleTag: "Eligible",

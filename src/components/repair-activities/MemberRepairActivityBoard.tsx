@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { repairStatusLabels } from "@/config/repairs";
 import { memberRepairActivitiesCopy } from "@/config/repair-activities";
+import { canOperateActivityStaff } from "@/features/repair-activities/repair-activity-validation";
 import type {
   StaffBoardView,
   StaffRegistrationView,
@@ -215,7 +216,8 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
     );
   }
 
-  const opsDisabled = !board.attended || busy !== null;
+  const staffOpen = canOperateActivityStaff(board.activity.signupClosesAt);
+  const opsDisabled = !staffOpen || !board.attended || busy !== null;
   const withdrawBusy = withdrawTarget ? busy === `withdraw:${withdrawTarget.id}` : false;
   const checkInBusy = busy === "check-in";
   const selectedRows = board.eligible.filter((row) => selected.has(row.id));
@@ -233,16 +235,16 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
             className="activity-board__attend-cta"
             variant="solid"
             onClick={() => void attend()}
-            disabled={busy !== null}
+            disabled={!staffOpen || busy !== null}
           >
             {busy === "attend" ? copy.attending : copy.attendCta}
           </Button>
         )}
       </div>
 
-      {!board.attended ? (
+      {!staffOpen || !board.attended ? (
         <Card className="activity-board__attend-banner" variant="notice">
-          <p role="status">{copy.attendPrompt}</p>
+          <p role="status">{staffOpen ? copy.attendPrompt : copy.signupNotClosed}</p>
         </Card>
       ) : null}
       {message ? (
@@ -345,7 +347,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
                     <Button
                       variant="ghost"
                       onClick={() => setWithdrawTarget(row)}
-                      disabled={opsDisabled}
+                      disabled={!board.attended || busy !== null}
                     >
                       {busy === `withdraw:${row.id}` ? copy.withdrawing : copy.withdraw}
                     </Button>

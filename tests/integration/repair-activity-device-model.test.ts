@@ -197,10 +197,22 @@ async function registerCheckInAndServe(input: {
   });
   assert.equal(created.status, 201, `报名应成功：${JSON.stringify(created.json)}`);
   const registrationId = (created.json.data as { id: string }).id;
-  await repairActivityStaffService.markAttendance(ACTIVITY_ID, staffActor);
-  await repairActivityStaffService.checkIn(ACTIVITY_ID, [registrationId], staffActor);
-  const served = await repairActivityStaffService.serve(ACTIVITY_ID, registrationId, staffActor);
-  return { registrationId, repairRecordId: served.repairRecordId };
+  const activity = await getDb().repairActivity.findUniqueOrThrow({ where: { id: ACTIVITY_ID } });
+  await getDb().repairActivity.update({
+    where: { id: ACTIVITY_ID },
+    data: { signupClosesAt: new Date(Date.now() - 1_000) },
+  });
+  try {
+    await repairActivityStaffService.markAttendance(ACTIVITY_ID, staffActor);
+    await repairActivityStaffService.checkIn(ACTIVITY_ID, [registrationId], staffActor);
+    const served = await repairActivityStaffService.serve(ACTIVITY_ID, registrationId, staffActor);
+    return { registrationId, repairRecordId: served.repairRecordId };
+  } finally {
+    await getDb().repairActivity.update({
+      where: { id: ACTIVITY_ID },
+      data: { signupClosesAt: activity.signupClosesAt },
+    });
+  }
 }
 
 /**

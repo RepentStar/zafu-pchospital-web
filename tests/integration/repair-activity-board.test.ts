@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 
 import { POST as POST_CHECK_IN } from "../../src/app/api/v1/member/repair-activities/[id]/check-in/route";
+import { POST as POST_ATTENDANCE } from "../../src/app/api/v1/member/repair-activities/[id]/attendance/route";
+import { POST as POST_SERVE } from "../../src/app/api/v1/member/repair-activities/[id]/serve/route";
 import { POST as POST_WITHDRAW } from "../../src/app/api/v1/member/repair-activities/[id]/withdraw/route";
 import { POST as POST_REGISTRATION } from "../../src/app/api/v1/repair-activities/[id]/registrations/route";
 import { repairActivityStaffService } from "../../src/features/repair-activities/repair-activity-staff-service";
@@ -248,6 +250,10 @@ function postWithdraw(registrationId: string, cookie = staffCookie) {
 
 /** 走公开报名路由建一条报名；返回 id。 */
 async function signUpRegistration(name: string, phone: string): Promise<string> {
+  await getDb().repairActivity.update({
+    where: { id: ACTIVITY_ID },
+    data: { signupClosesAt: new Date(Date.now() + 60_000) },
+  });
   const created = await signup({
     name,
     phone,
@@ -255,6 +261,10 @@ async function signUpRegistration(name: string, phone: string): Promise<string> 
     consentAccepted: true,
   });
   assert.equal(created.status, 201, `报名应成功：${JSON.stringify(created.json)}`);
+  await getDb().repairActivity.update({
+    where: { id: ACTIVITY_ID },
+    data: { signupClosesAt: new Date(Date.now() - 1_000) },
+  });
   return (created.json.data as { id: string }).id;
 }
 
@@ -264,6 +274,10 @@ before(async () => {
   // 文件内累计不能超过 10 次，先清一次避免与其它用例相互挤占。
   resetRateLimitsForTests();
   await prepareFixtures();
+  await getDb().repairActivity.update({
+    where: { id: ACTIVITY_ID },
+    data: { signupClosesAt: new Date(Date.now() - 1_000) },
+  });
   // 主接待员先标记出勤（幂等）；「未出勤 403」用例用另一位接待员。
   await repairActivityStaffService.markAttendance(ACTIVITY_ID, staffActor);
   staffCookie = await sessionCookie(STAFF_USER_ID, "ADMIN");
@@ -425,4 +439,77 @@ dbTest("非本活动报名：404 ACTIVITY_REGISTRATION_NOT_FOUND", async () => {
     where: { id: otherRegistration.id },
   });
   assert.equal(row.status, "REGISTERED", "被拒绝的签到不应改动别处的报名");
+});
+
+dbTest("报名未截止：出勤、签到、接待均拒绝，已有出勤也不可绕过", async () => {
+  const db = getDb();
+  const registrationId = await signUpRegistration("REG79 闸门", "13900000025");
+  const checkedIn = await postCheckIn([registrationId]);
+  assert.equal(checkedIn.status, 200);
+  const beforeRow = await db.repairActivityRegistration.findUniqueOrThrow({
+    where: { id: registrationId },
+  });
+  const auditCount = await db.auditLog.count({ where: { actorUserId: STAFF_USER_ID } });
+  const activity = await db.repairActivity.findUniqueOrThrow({ where: { id: ACTIVITY_ID } });
+  try {
+    for (const phase of ["OPEN", "FULL", "UPCOMING"] as const) {
+      const count = await db.repairActivityRegistration.count({
+        where: { activityId: ACTIVITY_ID },
+      });
+      await db.repairActivity.update({
+        where: { id: ACTIVITY_ID },
+        data: {
+          signupOpensAt: new Date(Date.now() + (phase === "UPCOMING" ? 60_000 : -60_000)),
+          signupClosesAt: new Date(Date.now() + 120_000),
+          capacity: phase === "FULL" ? count : 100,
+        },
+      });
+      assert.equal(
+        (await repairActivityStaffService.getBoard(ACTIVITY_ID, staffActor)).activity.status,
+        phase,
+      );
+      for (const [route, action, body, cookie] of [
+        [POST_ATTENDANCE, "attendance", {}, staffCookie],
+        [POST_ATTENDANCE, "attendance", {}, absentCookie],
+        [POST_CHECK_IN, "check-in", { registrationIds: [registrationId] }, staffCookie],
+        [POST_SERVE, "serve", { registrationId }, staffCookie],
+      ] as const) {
+        const result = await callRoute(
+          route,
+          `http://localhost/api/v1/member/repair-activities/${ACTIVITY_ID}/${action}`,
+          {
+            method: "POST",
+            body,
+            params: { id: ACTIVITY_ID },
+            headers: { cookie },
+          },
+        );
+        assert.equal(result.status, 409, `${phase} ${action}: ${JSON.stringify(result.json)}`);
+        assert.equal(errorCodeOf(result.json), "ACTIVITY_NOT_OPEN");
+      }
+    }
+    assert.deepEqual(
+      await db.repairActivityRegistration.findUniqueOrThrow({
+        where: { id: registrationId },
+      }),
+      beforeRow,
+      "被拒绝的操作不得更改报名或生成维修记录",
+    );
+    assert.equal(
+      await db.repairActivityAttendance.count({
+        where: { activityId: ACTIVITY_ID, memberProfileId: ABSENT_STAFF_PROFILE_ID },
+      }),
+      0,
+    );
+    assert.equal(await db.auditLog.count({ where: { actorUserId: STAFF_USER_ID } }), auditCount);
+  } finally {
+    await db.repairActivity.update({
+      where: { id: ACTIVITY_ID },
+      data: {
+        signupOpensAt: activity.signupOpensAt,
+        signupClosesAt: activity.signupClosesAt,
+        capacity: activity.capacity,
+      },
+    });
+  }
 });

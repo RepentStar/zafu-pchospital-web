@@ -3,12 +3,27 @@ import test from "node:test";
 
 import {
   canCheckInRegistration,
+  canOperateActivityStaff,
+  assertActivityStaffOpen,
   canServeRegistration,
   canWithdrawRegistration,
   mapIssueTypeToCategoryCode,
   shanghaiCalendarDay,
   sortQueueByCheckedInAt,
 } from "../../src/features/repair-activities/repair-activity-validation";
+
+test("报名截止闸门：截止前禁止出勤、签到与接待，截止时刻起开放", () => {
+  const deadline = new Date("2026-10-08T02:00:00.000Z");
+  const before = new Date(deadline.getTime() - 1);
+  assert.equal(canOperateActivityStaff(deadline, before), false);
+  assert.throws(() => assertActivityStaffOpen(deadline, before), {
+    code: "ACTIVITY_NOT_OPEN",
+    status: 409,
+  });
+  assert.equal(canOperateActivityStaff(deadline.toISOString(), deadline), true);
+  assert.doesNotThrow(() => assertActivityStaffOpen(deadline, deadline));
+  assert.equal(canOperateActivityStaff(deadline, new Date(deadline.getTime() + 1)), true);
+});
 
 test("签到矩阵：仅 REGISTERED 可签到", () => {
   assert.equal(canCheckInRegistration("REGISTERED"), true);
