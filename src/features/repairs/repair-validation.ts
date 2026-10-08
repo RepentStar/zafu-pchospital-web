@@ -1,5 +1,6 @@
 import { repairFieldLimits } from "@/config/repairs";
 import { AppError } from "@/lib/api/errors";
+import { CN_MOBILE_PATTERN } from "@/lib/security/normalization";
 import type { RepairDraftFields, RepairResult } from "@/types/contracts";
 
 export function normalizeDraftFields(input: RepairDraftFields): RepairDraftFields {
@@ -7,6 +8,8 @@ export function normalizeDraftFields(input: RepairDraftFields): RepairDraftField
     repairDate: input.repairDate === undefined ? undefined : input.repairDate || null,
     durationMinutes: input.durationMinutes,
     categoryId: input.categoryId === undefined ? undefined : input.categoryId || null,
+    ownerName: input.ownerName === undefined ? undefined : clean(input.ownerName),
+    ownerPhone: input.ownerPhone === undefined ? undefined : cleanOwnerPhone(input.ownerPhone),
     content: input.content === undefined ? undefined : clean(input.content),
     result: input.result,
     remark: input.remark === undefined ? undefined : clean(input.remark),
@@ -20,6 +23,8 @@ export function isBlankDraftFields(input: RepairDraftFields): boolean {
     blank(input.repairDate) &&
     blank(input.durationMinutes) &&
     blank(input.categoryId) &&
+    blank(input.ownerName) &&
+    blank(input.ownerPhone) &&
     blank(input.content) &&
     blank(input.result) &&
     blank(input.remark)
@@ -45,6 +50,11 @@ export function validateDraftFields(input: RepairDraftFields): void {
     errors.durationMinutes = [
       `维修时长须为 ${repairFieldLimits.durationMinutesMin}–${repairFieldLimits.durationMinutesMax} 分钟`,
     ];
+  if (input.ownerName != null && input.ownerName.length > repairFieldLimits.ownerNameMaxLength)
+    errors.ownerName = [`机主姓名不能超过 ${repairFieldLimits.ownerNameMaxLength} 字`];
+  // 草稿允许不填电话（与日期 / 时长同思路）；填了就必须是合法的 11 位手机号。
+  if (input.ownerPhone != null && !CN_MOBILE_PATTERN.test(input.ownerPhone))
+    errors.ownerPhone = ["请输入 11 位中国大陆手机号"];
   if (input.content != null && input.content.length > repairFieldLimits.contentMaxLength)
     errors.content = [`维修内容不能超过 ${repairFieldLimits.contentMaxLength} 字`];
   if (input.remark != null && input.remark.length > repairFieldLimits.remarkMaxLength)
@@ -58,9 +68,10 @@ export function validateSubmission(record: {
   repairDate: Date | null;
   durationMinutes: number | null;
   categoryId: string | null;
+  ownerName: string | null;
+  ownerPhone: string | null;
   content: string | null;
   result: string | null;
-  photoCount: number;
 }): void {
   const errors: Record<string, string[]> = {};
   if (!record.repairDate) errors.repairDate = ["请填写维修日期"];
@@ -81,12 +92,15 @@ export function validateSubmission(record: {
       `维修时长须为 ${repairFieldLimits.durationMinutesMin}–${repairFieldLimits.durationMinutesMax} 分钟`,
     ];
   if (!record.categoryId) errors.categoryId = ["请选择故障分类"];
-  const content = record.content?.trim() ?? "";
-  if (!content) errors.content = ["请填写维修内容"];
-  else if (content.length > repairFieldLimits.contentMaxLength)
+  // 机主姓名 / 电话改为提交必填（issue #79 第 6 项）：旧字段「维修内容」与照片不再是提交门槛。
+  if (!record.ownerName) errors.ownerName = ["请填写机主姓名"];
+  if (!record.ownerPhone) errors.ownerPhone = ["请填写机主电话"];
+  else if (!CN_MOBILE_PATTERN.test(record.ownerPhone))
+    errors.ownerPhone = ["请输入 11 位中国大陆手机号"];
+  // `content` 不再是提交必填（旧记录仍可能带着历史正文），但上限校验保留。
+  if (record.content != null && record.content.length > repairFieldLimits.contentMaxLength)
     errors.content = [`维修内容不能超过 ${repairFieldLimits.contentMaxLength} 字`];
   if (!isRepairResult(record.result)) errors.result = ["维修结果缺失"];
-  if (record.photoCount < 1) errors.photos = ["至少上传一张维修照片"];
   if (Object.keys(errors).length)
     throw new AppError("REPAIR_SUBMISSION_INCOMPLETE", "请补全维修记录后再提交", {
       fieldErrors: errors,
@@ -103,6 +117,11 @@ export function parseRepairDate(value: string | null | undefined): Date | null |
 function clean(value: string | null): string | null {
   const result = value?.trim() ?? "";
   return result || null;
+}
+/** 电话按存储口径归一：剥掉空格 / 连字符等非数字字符，空串落 null（与 `normalizePhone` 一致）。 */
+function cleanOwnerPhone(value: string | null): string | null {
+  const digits = value?.replace(/\D/g, "") ?? "";
+  return digits || null;
 }
 function isDate(value: string): boolean {
   return (

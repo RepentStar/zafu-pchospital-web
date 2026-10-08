@@ -43,7 +43,14 @@ export const repairQueryService: RepairQueryServiceContract = {
         take: input.pageSize,
       }),
     ]);
-    return { items: rows.map(toRepairView), pagination: paginationMeta(input, total) };
+    // ❗ 管理端列表（`/admin/repairs` 走同一入口）必须对 `repair:review` 下发完整机主电话：
+    // 管理弹窗编辑表单以列表行数据为 `defaultValue`，列表不下发就会在保存其它字段时把号码清空。
+    return {
+      items: rows.map((row) =>
+        toRepairView(row, { canViewOwnerPhone: actor.permissions.includes("repair:review") }),
+      ),
+      pagination: paginationMeta(input, total),
+    };
   },
   async getById(recordId, actor) {
     const record = await repairRepository.getById(recordId);
@@ -179,6 +186,7 @@ export async function listMemberRecentRepairs(
       durationMinutes: true,
       result: true,
       content: true,
+      remark: true,
       updatedAt: true,
       category: { select: { name: true } },
     },
@@ -191,7 +199,7 @@ export async function listMemberRecentRepairs(
     durationMinutes: row.durationMinutes,
     categoryName: row.category?.name ?? null,
     result: row.result,
-    contentExcerpt: excerpt(row.content),
+    contentExcerpt: excerpt(row.remark, row.content),
     updatedAt: row.updatedAt.toISOString(),
   }));
 }
@@ -217,7 +225,7 @@ export async function listMemberRecentActivity(
 ): Promise<MemberRecentActivity[]> {
   const rows = await getDb().repairRecord.findMany({
     where: { deletedAt: null, memberProfileId },
-    select: { id: true, status: true, repairDate: true, content: true, updatedAt: true },
+    select: { id: true, status: true, repairDate: true, content: true, remark: true, updatedAt: true },
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: limit,
   });
@@ -225,7 +233,7 @@ export async function listMemberRecentActivity(
     id: row.id,
     status: row.status as MemberRecentActivity["status"],
     repairDate: row.repairDate ? row.repairDate.toISOString().slice(0, 10) : null,
-    contentExcerpt: excerpt(row.content),
+    contentExcerpt: excerpt(row.remark, row.content),
     updatedAt: row.updatedAt.toISOString(),
   }));
 }
@@ -234,10 +242,13 @@ function available(value: number): MetricValue {
   return { value, status: "AVAILABLE" };
 }
 
-/** 正文摘要：压平换行、截断到 60 个码点，不泄露完整长文本。 */
-function excerpt(content: string | null): string {
-  const flat = (content ?? "").replace(/\s+/g, " ").trim();
-  if (!flat) return "未填写维修内容";
+/**
+ * 摘要取值链（issue #79 第 6 项）：备注优先，老记录的 `content` 回退；
+ * 两者皆空时占位「未填写备注」。压平换行、截断到 60 个码点，不泄露完整长文本。
+ */
+function excerpt(remark: string | null, content: string | null): string {
+  const flat = (remark?.trim() || content || "").replace(/\s+/g, " ").trim();
+  if (!flat) return "未填写备注";
   const chars = [...flat];
   return chars.length > 60 ? `${chars.slice(0, 60).join("")}…` : flat;
 }
@@ -294,6 +305,8 @@ export function listWhere(
       ? [
           { content: { contains: query } },
           { remark: { contains: query } },
+          // 机主姓名可搜；机主电话不参与搜索（隐私口径见任务书 3.3）。
+          { ownerName: { contains: query } },
           {
             memberProfile: {
               OR: [{ realName: { contains: query } }, { nickname: { contains: query } }],

@@ -19,9 +19,16 @@ export function memberRef(row: MemberNameSource): { id: string; name: string } {
   };
 }
 
-export function excerptText(content: string | null | undefined, limit = 60): string {
-  const flat = (content ?? "").replace(/\s+/g, " ").trim();
-  if (!flat) return "未填写维修内容";
+/**
+ * 摘要取值链（issue #79 第 6 项）：备注优先，老记录的 `content` 回退；
+ * 两者皆空时占位「未填写备注」。压平换行、截断到 `limit` 个码点。
+ */
+export function excerptText(
+  record: { remark: string | null | undefined; content: string | null | undefined },
+  limit = 60,
+): string {
+  const flat = (record.remark?.trim() || record.content || "").replace(/\s+/g, " ").trim();
+  if (!flat) return "未填写备注";
   const chars = [...flat];
   return chars.length > limit ? `${chars.slice(0, limit).join("")}…` : flat;
 }
@@ -67,6 +74,7 @@ type FavoriteRow = {
   record: {
     repairDate: Date | null;
     content: string | null;
+    remark: string | null;
     isDifficult: boolean;
     isTypical: boolean;
     category: { name: string } | null;
@@ -80,7 +88,7 @@ export function toFavoriteView(row: FavoriteRow): FavoriteView {
     repairRecordId: row.repairRecordId,
     repairDate: row.record.repairDate ? row.record.repairDate.toISOString().slice(0, 10) : null,
     categoryName: row.record.category?.name ?? null,
-    contentExcerpt: excerptText(row.record.content),
+    contentExcerpt: excerptText(row.record),
     memberName: memberRef(row.record.memberProfile).name,
     isDifficult: row.record.isDifficult,
     isTypical: row.record.isTypical,
@@ -97,7 +105,7 @@ type NotificationRow = {
   createdAt: Date;
   readAt: Date | null;
   actor: MemberNameSource | null;
-  record: { content: string | null } | null;
+  record: { content: string | null; remark: string | null } | null;
 };
 
 export function toNotificationView(row: NotificationRow): NotificationView {
@@ -108,7 +116,7 @@ export function toNotificationView(row: NotificationRow): NotificationView {
     repairRecordId: row.repairRecordId,
     commentId: row.commentId,
     actor: row.actor ? memberRef(row.actor) : null,
-    repairExcerpt: row.record ? excerptText(row.record.content) : null,
+    repairExcerpt: row.record ? excerptText(row.record) : null,
     createdAt: row.createdAt.toISOString(),
     readAt: row.readAt?.toISOString() ?? null,
   };

@@ -86,6 +86,8 @@ async function loadRows(
       result: true,
       status: true,
       createdAt: true,
+      ownerName: true,
+      ownerPhone: true,
       memberProfile: { select: { realName: true, nickname: true } },
       category: { select: { name: true } },
       photos: { where: { deletedAt: null }, select: { id: true }, orderBy: { sortOrder: "asc" } },
@@ -102,6 +104,9 @@ async function loadRows(
   return records.map((record) => ({
     repairDate: record.repairDate?.toISOString().slice(0, 10) ?? "",
     memberName: record.memberProfile.nickname || record.memberProfile.realName,
+    // 机主信息按数据导出口径原样输出（`data:export` 权限 + 导出审计留痕，不做掩码）。
+    ownerName: record.ownerName ?? "",
+    ownerPhone: record.ownerPhone ?? "",
     categoryName: record.category?.name ?? "未分类",
     result: record.result ? repairResultLabels[record.result as RepairResult] : "",
     durationMinutes: record.durationMinutes === null ? "" : String(record.durationMinutes),

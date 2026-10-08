@@ -29,7 +29,7 @@ export const repairReviewService: RepairReviewServiceContract = {
     if (existing) {
       if (existing.repairRecordId !== recordId || existing.decision !== input.decision)
         throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键与原请求不一致");
-      return toRepairView(existing.record);
+      return toRepairView(existing.record, { canViewOwnerPhone: true });
     }
     const now = new Date();
     assertRepairTransition("PENDING", input.decision);
@@ -98,6 +98,6 @@ export const repairReviewService: RepairReviewServiceContract = {
         include: repairDetailInclude,
       });
     });
-    return toRepairView(record);
+    return toRepairView(record, { canViewOwnerPhone: true });
   },
 };

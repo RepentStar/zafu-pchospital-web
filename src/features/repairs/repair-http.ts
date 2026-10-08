@@ -46,6 +46,8 @@ export function draftInput(body: Record<string, unknown>) {
     repairDate: nullableString(body.repairDate),
     durationMinutes: nullableNumber(body.durationMinutes),
     categoryId: nullableString(body.categoryId),
+    ownerName: nullableString(body.ownerName),
+    ownerPhone: nullableString(body.ownerPhone),
     content: nullableString(body.content),
     result: nullableResult(body.result),
     remark: nullableString(body.remark),

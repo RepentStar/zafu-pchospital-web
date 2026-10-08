@@ -14,7 +14,7 @@ import { MEMBER_DASHBOARD_NOTIFICATION_LIMIT } from "@/types/contracts";
 
 const notificationInclude = {
   actor: { include: { user: { select: { displayName: true } } } },
-  record: { select: { content: true } },
+  record: { select: { content: true, remark: true } },
 } as const;
 
 function notFound(): never {
