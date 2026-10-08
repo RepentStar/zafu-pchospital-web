@@ -10,9 +10,17 @@ export function normalizeQq(value: string): string {
   return normalized;
 }
 
+/**
+ * 大陆手机号规则（剔除非数字后的 11 位）。
+ *
+ * 维修记录的机主电话（`ownerPhone`）复用这一份正则：两边各写一份，
+ * 迟早会出现「报名能填、记录不能填」这类只在一侧生效的格式漂移。
+ */
+export const CN_MOBILE_PATTERN = /^1[3-9]\d{9}$/;
+
 export function normalizePhone(value: string): string {
   const normalized = value.replace(/\D/g, "");
-  if (!/^1[3-9]\d{9}$/.test(normalized)) {
+  if (!CN_MOBILE_PATTERN.test(normalized)) {
     throw new AppError("VALIDATION_FAILED", "手机号格式不正确", {
       fieldErrors: { phone: ["请输入 11 位中国大陆手机号"] },
     });

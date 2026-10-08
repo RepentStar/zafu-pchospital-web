@@ -106,6 +106,8 @@ export type RepairExportInput = Omit<RepairListInput, "page" | "pageSize">;
 export type RepairExportRow = {
   repairDate: string;
   memberName: string;
+  ownerName: string;
+  ownerPhone: string;
   categoryName: string;
   result: string;
   durationMinutes: string;
@@ -520,6 +522,16 @@ export type RepairView = {
   category: RepairCategoryView | null;
   /** 机型（issue #68）：活动报名时填的选填字段，接待落单时带进记录；手工建单一般为 null。 */
   deviceModel: string | null;
+  /** 机主（客户）姓名：接待落单带自报名，手工建单由成员填写；旧数据为 null。 */
+  ownerName: string | null;
+  /**
+   * 机主（客户）电话完整号。
+   *
+   * 可见性口径（fail-closed）：仅记录归属人与具备 `repair:review` 权限者拿到完整号，
+   * 其余一律为 `null`（既不下发掩码也不下发完整号）。**非可选字段**，
+   * 消费方不必判断字段是否存在，只需判断是否为 null。
+   */
+  ownerPhone: string | null;
   content: string | null;
   result: RepairResult | null;
   remark: string | null;
@@ -552,6 +564,8 @@ export type RepairDraftFields = {
   repairDate?: string | null;
   durationMinutes?: number | null;
   categoryId?: string | null;
+  ownerName?: string | null;
+  ownerPhone?: string | null;
   content?: string | null;
   result?: RepairResult | null;
   remark?: string | null;
