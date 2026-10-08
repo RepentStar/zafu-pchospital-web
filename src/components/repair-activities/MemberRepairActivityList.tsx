@@ -70,7 +70,9 @@ export function MemberRepairActivityList() {
             <Card className="activity-card repair-panel">
               <div className="activity-card__head">
                 <h2 className="activity-card__title">{item.title}</h2>
-                <span className="admin-tag">
+                <span
+                  className={item.status === "CLOSED" ? "admin-tag admin-tag--accent" : "admin-tag"}
+                >
                   {repairActivityStatusLabels[item.status as RepairActivityStatus]}
                 </span>
               </div>
