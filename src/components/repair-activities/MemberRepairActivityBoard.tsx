@@ -23,6 +23,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [withdrawTarget, setWithdrawTarget] = useState<StaffRegistrationView | null>(null);
+  const [checkInConfirmOpen, setCheckInConfirmOpen] = useState(false);
 
   const load = useCallback(async () => {
     setMessage("");
@@ -97,11 +98,15 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
     await load();
   }
 
-  async function checkIn() {
+  function openCheckInConfirm() {
     if (selected.size === 0) {
       setMessage(copy.selectNone);
       return;
     }
+    setCheckInConfirmOpen(true);
+  }
+
+  async function confirmCheckIn() {
     setBusy("check-in");
     setToast(null);
     setMessage("");
@@ -114,6 +119,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       setMessage(result.message);
       return;
     }
+    setCheckInConfirmOpen(false);
     setToast(copy.checkInSuccess);
     await load();
   }
@@ -186,6 +192,8 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
 
   const opsDisabled = !board.attended || busy !== null;
   const withdrawBusy = withdrawTarget ? busy === `withdraw:${withdrawTarget.id}` : false;
+  const checkInBusy = busy === "check-in";
+  const selectedRows = board.eligible.filter((row) => selected.has(row.id));
 
   return (
     <div className="activity-board">
@@ -260,7 +268,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
             <p className="muted">{copy.selectHint}</p>
             <Button
               variant="solid"
-              onClick={() => void checkIn()}
+              onClick={openCheckInConfirm}
               disabled={opsDisabled || selected.size === 0}
             >
               {busy === "check-in" ? copy.checkingIn : copy.checkIn}
@@ -323,6 +331,30 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
           )}
         </Card>
       </div>
+
+      {checkInConfirmOpen ? (
+        <ConfirmDialog
+          title={copy.checkInConfirmTitle}
+          cancelLabel={copy.checkInCancel}
+          confirmLabel={checkInBusy ? copy.checkingIn : copy.checkInConfirm}
+          busy={checkInBusy}
+          onClose={() => {
+            if (!checkInBusy) setCheckInConfirmOpen(false);
+          }}
+          onConfirm={() => void confirmCheckIn()}
+        >
+          <p>{copy.checkInConfirmHint}</p>
+          <ul className="admin-plain-list">
+            {selectedRows.map((row) => (
+              <li key={row.id}>
+                <strong>
+                  {row.name} · {row.phoneMasked}
+                </strong>
+              </li>
+            ))}
+          </ul>
+        </ConfirmDialog>
+      ) : null}
 
       {withdrawTarget ? (
         <ConfirmDialog
