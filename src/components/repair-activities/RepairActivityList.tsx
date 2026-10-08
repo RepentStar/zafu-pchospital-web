@@ -80,7 +80,7 @@ export function RepairActivityList() {
         {pageItems.map((item) => {
           const ended = item.status === "ENDED";
           const body = (
-            <Card className={`activity-card${ended ? " activity-card--ended" : ""}`}>
+            <Card className={`activity-card repair-panel ${ended ? "activity-card--ended" : ""}`}>
               <div className="activity-card__head">
                 <h2 className="activity-card__title">{item.title}</h2>
                 <span className={repairActivityStatusBadgeClass(item.status)}>
@@ -99,7 +99,7 @@ export function RepairActivityList() {
               </dl>
               <div className="activity-card__footer">
                 <p
-                  className={`muted${ended ? "" : " activity-card__footer-slot"}`}
+                  className={`muted${ended ? "" : "activity-card__footer-slot"}`}
                   aria-hidden={ended ? undefined : true}
                 >
                   {repairActivitiesPage.endedHint}
@@ -160,9 +160,6 @@ function formatCapacityLine(item: RepairActivityPublicView, ended: boolean): str
     .replace("{registered}", String(item.registeredCount))
     .replace("{capacity}", String(item.capacity));
   if (ended) return capacity;
-  const remaining = repairActivitiesPage.remainingShort.replace(
-    "{count}",
-    String(item.remaining),
-  );
+  const remaining = repairActivitiesPage.remainingShort.replace("{count}", String(item.remaining));
   return `${remaining} · ${capacity}`;
 }

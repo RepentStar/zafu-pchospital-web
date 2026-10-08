@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  activityEndExclusive,
   assertActivityTimeRules,
   assertValidIssueType,
   canAcceptNewRegistration,
@@ -57,7 +58,7 @@ test("派生状态：未开始 / 报名中 / 已报满 / 报名截止 / 已结�
   assert.equal(
     deriveRepairActivityStatus({
       ...base,
-      now: new Date("2026-10-01T06:00:00.000Z"),
+      now: new Date("2026-10-01T16:00:00.000Z"), // 上海 10-02 00:00，活动当天已结束
       effectiveRegistrationCount: 3,
     }),
     "ENDED",
@@ -68,7 +69,7 @@ test("优先级：已结束压过报名截止与报满", () => {
   assert.equal(
     deriveRepairActivityStatus({
       ...base,
-      now: new Date("2026-10-01T07:00:00.000Z"),
+      now: new Date("2026-10-01T17:00:00.000Z"), // 上海 10-02 01:00
       effectiveRegistrationCount: 10,
     }),
     "ENDED",
@@ -95,7 +96,7 @@ test("软删释放名额后 FULL 回到 OPEN", () => {
   );
 });
 
-test("边界：opensAt 瞬间为 OPEN；closesAt 瞬间为 CLOSED；activityAt 瞬间为 ENDED", () => {
+test("边界：opensAt 瞬间为 OPEN；closesAt 瞬间为 CLOSED；activityAt 当天仍非 ENDED、次日 00:00（上海）起 ENDED", () => {
   assert.equal(
     deriveRepairActivityStatus({
       ...base,
@@ -112,10 +113,99 @@ test("边界：opensAt 瞬间为 OPEN；closesAt 瞬间为 CLOSED；activityAt �
     }),
     "CLOSED",
   );
+  // 活动当天（上海 10-01）含 23:59 仍按报名窗口判定（已截止），不是 ENDED（issue #79）。
   assert.equal(
     deriveRepairActivityStatus({
       ...base,
-      now: base.activityAt,
+      now: new Date("2026-10-01T15:59:59.999Z"), // 上海 10-01 23:59:59.999
+      effectiveRegistrationCount: 0,
+    }),
+    "CLOSED",
+  );
+  assert.equal(
+    deriveRepairActivityStatus({
+      ...base,
+      now: new Date("2026-10-01T16:00:00.000Z"), // 上海 10-02 00:00
+      effectiveRegistrationCount: 0,
+    }),
+    "ENDED",
+  );
+});
+
+test("跨月：上海 10-31 的活动到 11-01 00:00（上海）才 ENDED", () => {
+  const crossMonthBase = {
+    activityAt: new Date("2026-10-31T06:00:00.000Z"), // 上海 10-31 14:00
+    signupOpensAt: new Date("2026-10-20T00:00:00.000Z"),
+    signupClosesAt: new Date("2026-10-31T05:00:00.000Z"),
+    capacity: 10,
+  };
+  assert.equal(
+    deriveRepairActivityStatus({
+      ...crossMonthBase,
+      now: new Date("2026-10-31T15:59:59.999Z"), // 上海 10-31 23:59:59.999
+      effectiveRegistrationCount: 0,
+    }),
+    "CLOSED",
+  );
+  assert.equal(
+    deriveRepairActivityStatus({
+      ...crossMonthBase,
+      now: new Date("2026-10-31T16:00:00.000Z"), // 上海 11-01 00:00
+      effectiveRegistrationCount: 0,
+    }),
+    "ENDED",
+  );
+});
+
+test("跨年：上海 12-31 的活动到次年 01-01 00:00（上海）才 ENDED", () => {
+  const crossYearBase = {
+    activityAt: new Date("2026-12-31T06:00:00.000Z"), // 上海 12-31 14:00
+    signupOpensAt: new Date("2026-12-20T00:00:00.000Z"),
+    signupClosesAt: new Date("2026-12-31T05:00:00.000Z"),
+    capacity: 10,
+  };
+  assert.equal(
+    deriveRepairActivityStatus({
+      ...crossYearBase,
+      now: new Date("2026-12-31T15:59:59.999Z"), // 上海 12-31 23:59:59.999
+      effectiveRegistrationCount: 0,
+    }),
+    "CLOSED",
+  );
+  assert.equal(
+    deriveRepairActivityStatus({
+      ...crossYearBase,
+      now: new Date("2026-12-31T16:00:00.000Z"), // 上海 2027-01-01 00:00
+      effectiveRegistrationCount: 0,
+    }),
+    "ENDED",
+  );
+});
+
+test("activityAt 恰为上海 00:00：仍取该自然日，次日 00:00（上海）起 ENDED", () => {
+  // 上海 2026-10-01 00:00 = 2026-09-30T16:00:00Z；排他上界为 2026-10-01T16:00:00Z。
+  const midnightBase = {
+    activityAt: new Date("2026-09-30T16:00:00.000Z"),
+    signupOpensAt: new Date("2026-09-20T00:00:00.000Z"),
+    signupClosesAt: new Date("2026-09-30T15:00:00.000Z"),
+    capacity: 10,
+  };
+  assert.equal(
+    activityEndExclusive(midnightBase.activityAt).toISOString(),
+    "2026-10-01T16:00:00.000Z",
+  );
+  assert.equal(
+    deriveRepairActivityStatus({
+      ...midnightBase,
+      now: new Date("2026-10-01T15:59:59.999Z"), // 上海 10-01 23:59:59.999
+      effectiveRegistrationCount: 0,
+    }),
+    "CLOSED",
+  );
+  assert.equal(
+    deriveRepairActivityStatus({
+      ...midnightBase,
+      now: new Date("2026-10-01T16:00:00.000Z"), // 上海 10-02 00:00
       effectiveRegistrationCount: 0,
     }),
     "ENDED",

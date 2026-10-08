@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { formatShanghaiDateTime } from "@/components/repair-activities/activity-format";
+import { AdminToast, type AdminToastMessage } from "@/components/admin/AdminToast";
 import { repairActivityStatusBadgeClass } from "@/components/repair-activities/activity-status-badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -28,7 +29,7 @@ export function RepairActivityDetail({ activityId }: Props) {
   const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [activity, setActivity] = useState<RepairActivityPublicView | null>(null);
   const [problem, setProblem] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<AdminToastMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const [lookup, setLookup] = useState<RegistrationLookupView | null>(null);
   const [lookupPhone, setLookupPhone] = useState("");
@@ -76,7 +77,7 @@ export function RepairActivityDetail({ activityId }: Props) {
   function requestSignup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setProblem("");
-    setNotice("");
+    setNotice(null);
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
     setPendingSignup({
       name: data.name ?? "",
@@ -91,7 +92,7 @@ export function RepairActivityDetail({ activityId }: Props) {
     if (!pendingSignup) return;
     setBusy(true);
     setProblem("");
-    setNotice("");
+    setNotice(null);
     try {
       const response = await fetch(`/api/v1/repair-activities/${activityId}/registrations`, {
         method: "POST",
@@ -108,7 +109,7 @@ export function RepairActivityDetail({ activityId }: Props) {
         setProblem(json.error?.message ?? "报名失败");
       } else {
         setPendingSignup(null);
-        setNotice(copy.signupSuccess);
+        setNotice({ text: copy.signupSuccess, tone: "success" });
         signupFormRef.current?.reset();
         await load();
       }
@@ -124,7 +125,7 @@ export function RepairActivityDetail({ activityId }: Props) {
     event.preventDefault();
     setBusy(true);
     setProblem("");
-    setNotice("");
+    setNotice(null);
     setLookup(null);
     setLookupPhone("");
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
@@ -144,7 +145,7 @@ export function RepairActivityDetail({ activityId }: Props) {
       } else {
         setLookup(json.data);
         setLookupPhone(data.phone ?? "");
-        setNotice(copy.lookupSuccess);
+        setNotice({ text: copy.lookupSuccess, tone: "success" });
       }
     } catch {
       setProblem("网络异常，请稍后重试");
@@ -158,7 +159,7 @@ export function RepairActivityDetail({ activityId }: Props) {
     if (!lookup) return;
     setBusy(true);
     setProblem("");
-    setNotice("");
+    setNotice(null);
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
     try {
       const response = await fetch(
@@ -181,7 +182,7 @@ export function RepairActivityDetail({ activityId }: Props) {
       if (!json.success) {
         setProblem(json.error?.message ?? "修改失败");
       } else {
-        setNotice(copy.updateSuccess);
+        setNotice({ text: copy.updateSuccess, tone: "success" });
         if (json.data) {
           setLookup({ ...lookup, issueType: json.data.issueType, status: json.data.status });
         }
@@ -196,7 +197,7 @@ export function RepairActivityDetail({ activityId }: Props) {
   if (state === "loading") return <p className="muted">正在加载活动…</p>;
   if (state === "missing") {
     return (
-      <Card className="admin-panel">
+      <Card className="repair-panel">
         <p className="muted" role="alert">
           {problem || "活动已结束"}
         </p>
@@ -228,11 +229,11 @@ export function RepairActivityDetail({ activityId }: Props) {
 
   return (
     <div className="activity-detail">
-      <Card className="admin-panel">
+      <Card className="repair-panel">
         <div className="activity-card__head">
-          <h1 className="activity-card__title" id="repair-activity-detail-title">
+          <h2 className="activity-card__title" id="repair-activity-detail-title">
             {activity.title}
-          </h1>
+          </h2>
           <span className={repairActivityStatusBadgeClass(activity.status)}>
             {repairActivityStatusLabels[activity.status as RepairActivityStatus]}
           </span>
@@ -245,7 +246,8 @@ export function RepairActivityDetail({ activityId }: Props) {
           <div>
             <dt>{repairActivitiesPage.window}</dt>
             <dd>
-              {formatShanghaiDateTime(activity.signupOpensAt)} — {formatShanghaiDateTime(activity.signupClosesAt)}
+              {formatShanghaiDateTime(activity.signupOpensAt)} —{" "}
+              {formatShanghaiDateTime(activity.signupClosesAt)}
             </dd>
           </div>
           <div>
@@ -261,11 +263,7 @@ export function RepairActivityDetail({ activityId }: Props) {
         </dl>
       </Card>
 
-      {notice ? (
-        <p className="admin-status admin-status--success" role="status">
-          {notice}
-        </p>
-      ) : null}
+      <AdminToast toast={notice} onDismiss={() => setNotice(null)} />
       {problem ? (
         <p className="admin-status admin-status--error" role="alert">
           {problem}
@@ -273,7 +271,7 @@ export function RepairActivityDetail({ activityId }: Props) {
       ) : null}
 
       <div className="activity-detail__actions">
-        <Card className="admin-panel activity-detail__signup">
+        <Card className="repair-panel activity-detail__signup">
           <h2 className="admin-panel__title">{copy.signupTitle}</h2>
           {!open ? <p className="muted">{signupDisabledReason}</p> : null}
           <form
@@ -340,7 +338,7 @@ export function RepairActivityDetail({ activityId }: Props) {
           </form>
         </Card>
 
-        <Card className="admin-panel activity-detail__lookup">
+        <Card className="repair-panel activity-detail__lookup">
           <h2 className="admin-panel__title">{copy.lookupTitle}</h2>
           <form className="admin-form" onSubmit={doLookup} aria-label={copy.lookupTitle}>
             <label className="field">
@@ -426,4 +424,3 @@ export function RepairActivityDetail({ activityId }: Props) {
     </div>
   );
 }
-
