@@ -389,7 +389,11 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
                     {!recordId || !row.recordStatus ? (
                       <span className="muted">{copy.recordMissing}</span>
                     ) : row.recordStatus === "DRAFT" || row.recordStatus === "REJECTED" ? (
-                      <Button href={`/member/repairs/${recordId}/edit`}>{copy.fillRepair}</Button>
+                      <Button
+                        href={`/member/repairs/${recordId}/edit?returnActivityId=${encodeURIComponent(activityId)}`}
+                      >
+                        {copy.fillRepair}
+                      </Button>
                     ) : (
                       <Button variant="ghost" href={`/member/repairs/${recordId}`}>
                         {copy.viewRepair}
@@ -454,7 +458,9 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
           confirmLabel={copy.pendingServeFill}
           onClose={() => setPendingNotice(null)}
           onConfirm={() => {
-            router.push(`/member/repairs/${pendingNotice.repairRecordId}/edit`);
+            router.push(
+              `/member/repairs/${pendingNotice.repairRecordId}/edit?returnActivityId=${encodeURIComponent(activityId)}`,
+            );
           }}
         >
           <p>
