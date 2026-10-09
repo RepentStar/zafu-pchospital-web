@@ -13,6 +13,7 @@ import {
   repairResultLabels,
 } from "@/config/repairs";
 import { shanghaiToday } from "@/lib/shanghai-date";
+import { createIdempotencyKey } from "@/lib/idempotency-key";
 import type { RepairCategoryView, RepairDetailView } from "@/types/contracts";
 
 /** 点击整块日期输入框都弹出原生日历（默认只有右侧小图标会弹）。 */
@@ -133,10 +134,11 @@ export function RepairEditor({
     setMessage("");
     try {
       // 先把当前表单存一次再提交：否则「填了但没保存」会被服务端的完整性校验拦下。
+      const idempotencyKey = createIdempotencyKey();
       const saved = await persist();
       const response = await fetch(`/api/v1/repairs/${recordId}/submit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
         body: JSON.stringify({ version: saved.version }),
       });
       const json = await response.json();
