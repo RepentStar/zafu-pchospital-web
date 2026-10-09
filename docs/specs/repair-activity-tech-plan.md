@@ -166,11 +166,17 @@ CHECKED_IN ─撤回→ REGISTERED（清空 checkedInAt；可再签到）
 |---|---|---|
 | POST | `/api/v1/member/repair-activities/[id]/attendance` | 参加本场 |
 | GET | `/api/v1/member/repair-activities/[id]/board` | 左侧报名（可签到）+ 右侧排队；电话脱敏 |
-| POST | `/api/v1/member/repair-activities/[id]/check-in` | body: `registrationIds[]` 多选签到 |
+| POST | `/api/v1/member/repair-activities/[id]/check-in` | body: `registrationIds[]` + 可选 `issueTypeUpdates: { registrationId, issueType }[]`，核对后整批原子签到与改类型 |
 | POST | `/api/v1/member/repair-activities/[id]/withdraw` | body: `registrationId` 撤回 |
 | POST | `/api/v1/member/repair-activities/[id]/serve` | body: `registrationId` 接待落单 |
 
 均需 `requirePermission(…, "activity:staff")` + 已出勤（serve/check-in/withdraw）。
+
+签到确认弹窗按待签到列表顺序展示姓名、脱敏电话、已填机型与原类型，可独立修改类型；
+取消不保存，最终确认只提交快照 ID 与实际编辑项。普通成员无需签到、交给现场管理员的 XS 提醒
+不改变 MEMBER / ADMIN 权限。类型、状态、时间及类型变更 USER 审计在同一事务内提交；
+已入队相同类型重试幂等、不同类型拒绝，任一客户无效整批回滚。撤回保留修正后的类型，
+后续接待草稿分类使用该类型。完整输入与错误语义见 `docs/contracts/api-v1.md`。
 
 ### 4.3 管理
 

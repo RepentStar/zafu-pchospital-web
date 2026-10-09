@@ -1,6 +1,7 @@
 import { AppError } from "@/lib/api/errors";
 import {
   assertValidIssueType,
+  validateCheckInIssueTypeUpdates,
   type RepairActivityIssueType,
 } from "@/features/repair-activities/repair-activity-validation";
 
@@ -16,6 +17,13 @@ export function bodyRequiredInt(
   return value;
 }
 
+export function bodyCheckInIssueTypeUpdates(
+  body: Record<string, unknown>,
+  registrationIds: string[],
+) {
+  return validateCheckInIssueTypeUpdates(body.issueTypeUpdates, registrationIds);
+}
+
 export function bodyRequiredIsoDate(body: Record<string, unknown>, key: string): Date {
   const raw = body[key];
   if (typeof raw !== "string" || !raw.trim()) {
@@ -28,10 +36,7 @@ export function bodyRequiredIsoDate(body: Record<string, unknown>, key: string):
   return date;
 }
 
-export function bodyOptionalIsoDate(
-  body: Record<string, unknown>,
-  key: string,
-): Date | undefined {
+export function bodyOptionalIsoDate(body: Record<string, unknown>, key: string): Date | undefined {
   if (!(key in body) || body[key] === undefined || body[key] === null) return undefined;
   return bodyRequiredIsoDate(body, key);
 }
@@ -55,9 +60,7 @@ export function bodyRegistrationIds(body: Record<string, unknown>): string[] {
       fieldErrors: { registrationIds: ["请选择报名记录"] },
     });
   }
-  const ids = raw
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean);
+  const ids = raw.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean);
   if (ids.length === 0) {
     throw new AppError("VALIDATION_FAILED", "请至少选择一条报名记录", {
       fieldErrors: { registrationIds: ["请至少选择一条"] },

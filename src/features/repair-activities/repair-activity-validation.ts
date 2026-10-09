@@ -13,6 +13,39 @@ export const RepairActivityIssueType = [
 ] as const;
 export type RepairActivityIssueType = (typeof RepairActivityIssueType)[number];
 
+export type StaffCheckInIssueTypeUpdate = {
+  registrationId: string;
+  issueType: RepairActivityIssueType;
+};
+
+/** Route 与 Service 共用的签到类型校验；先限制数组长度再遍历。 */
+export function validateCheckInIssueTypeUpdates(
+  value: unknown,
+  registrationIds: string[],
+): StaffCheckInIssueTypeUpdate[] {
+  const ids = new Set(registrationIds.map((id) => id.trim()).filter(Boolean));
+  if (ids.size === 0 || ids.size > 100) {
+    throw new AppError("VALIDATION_FAILED", "单次请选择 1–100 条报名记录");
+  }
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > ids.size) {
+    throw new AppError("VALIDATION_FAILED", "issueTypeUpdates 必须是数组且不能超过本批客户数量");
+  }
+  const seen = new Set<string>();
+  return value.map((item: unknown) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new AppError("VALIDATION_FAILED", "故障类型更新项无效");
+    }
+    const entry = item as Record<string, unknown>;
+    const id = typeof entry.registrationId === "string" ? entry.registrationId.trim() : "";
+    if (!id || id.length > 36 || !ids.has(id) || seen.has(id)) {
+      throw new AppError("VALIDATION_FAILED", "更新 ID 必须属于本批客户且不能重复");
+    }
+    seen.add(id);
+    return { registrationId: id, issueType: assertValidIssueType(entry.issueType) };
+  });
+}
+
 /** Capacity lower bound shared by server validation and admin form HTML min. */
 export const REPAIR_ACTIVITY_CAPACITY_MIN = 1;
 

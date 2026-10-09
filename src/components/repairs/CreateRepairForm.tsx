@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { createIdempotencyKey } from "@/lib/idempotency-key";
 import { RepairEditor } from "./RepairEditor";
 
 /**
@@ -10,7 +11,7 @@ import { RepairEditor } from "./RepairEditor";
  * 幂等键固定在这一次页面会话，重复挂载或点重试不会多建记录。
  */
 export function CreateRepairForm() {
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(createIdempotencyKey);
   const [recordId, setRecordId] = useState("");
   const [error, setError] = useState("");
   const open = useCallback(async () => {

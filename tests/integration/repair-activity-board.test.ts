@@ -158,7 +158,7 @@ async function prepareFixtures(): Promise<void> {
       id: ACTIVITY_ID,
       title: ACTIVITY_TITLE,
       activityAt: new Date(now.getTime() + 7 * 24 * hour),
-      capacity: 20,
+      capacity: 100,
       signupOpensAt: new Date(now.getTime() - hour),
       signupClosesAt: new Date(now.getTime() + 24 * hour),
       createdAt: now,
@@ -222,13 +222,13 @@ function signup(body: Record<string, unknown>) {
   );
 }
 
-function postCheckIn(registrationIds: string[], cookie = staffCookie) {
+function postCheckIn(registrationIds: string[], cookie = staffCookie, issueTypeUpdates?: unknown) {
   return callRoute(
     POST_CHECK_IN,
     `http://localhost/api/v1/member/repair-activities/${ACTIVITY_ID}/check-in`,
     {
       method: "POST",
-      body: { registrationIds },
+      body: { registrationIds, ...(issueTypeUpdates === undefined ? {} : { issueTypeUpdates }) },
       params: { id: ACTIVITY_ID },
       headers: { cookie },
     },
@@ -288,6 +288,272 @@ after(async () => {
   if (!enabled) return;
   await cleanupFixtures();
   await disconnectDb();
+});
+
+/** 直接建立隔离报名，避免新校验用例消耗公开报名的 IP 限流额度。 */
+let checkInFixtureNumber = 100;
+async function checkInFixture(
+  extra: { activityId?: string; status?: string; deletedAt?: Date; issueType?: string } = {},
+) {
+  const phone = `1390000${String(checkInFixtureNumber++).padStart(4, "0")}`;
+  return getDb().repairActivityRegistration.create({
+    data: {
+      id: randomUUID(),
+      activityId: ACTIVITY_ID,
+      name: "REG79 类型核对",
+      phone,
+      phoneLast4: phone.slice(-4),
+      issueType: "CLEAN_ONLY",
+      status: "REGISTERED",
+      deviceModel: "REG79 测试机型",
+      createdAt: new Date(),
+      ...extra,
+    },
+  });
+}
+
+dbTest("核对后批量签到：新类型与标签、成员审计、撤回保留类型、接待分类贯通", async () => {
+  const db = getDb();
+  const first = await checkInFixture();
+  const second = await checkInFixture();
+  const result = await postCheckIn([first.id, second.id], staffCookie, [
+    { registrationId: first.id, issueType: "SOFTWARE_SYSTEM" },
+    { registrationId: second.id, issueType: "OTHER" },
+  ]);
+  assert.equal(result.status, 200, JSON.stringify(result.json));
+  const rows = (
+    result.json.data as {
+      checkedIn: Array<{ issueType: string; issueTypeLabel: string; checkedInAt: string }>;
+    }
+  ).checkedIn;
+  assert.equal(rows[0].issueType, "SOFTWARE_SYSTEM");
+  assert.equal(rows[0].issueTypeLabel, "软件 / 系统问题");
+  assert.equal(rows[1].issueType, "OTHER");
+  assert.equal(rows[0].checkedInAt, rows[1].checkedInAt);
+  const saved = await db.repairActivityRegistration.findUniqueOrThrow({ where: { id: first.id } });
+  assert.equal(saved.issueType, "SOFTWARE_SYSTEM");
+  assert.equal(saved.status, "CHECKED_IN");
+  assert.equal(saved.checkedInAt?.toISOString(), rows[0].checkedInAt);
+  const audits = await db.auditLog.findMany({
+    where: {
+      action: "repair_activity.registration_issue_type_updated",
+      targetId: { in: [first.id, second.id] },
+    },
+  });
+  assert.equal(audits.length, 2);
+  const audit = audits.find((row) => row.targetId === first.id)!;
+  assert.equal(audit.actorType, "USER");
+  assert.equal(audit.actorUserId, STAFF_USER_ID);
+  assert.deepEqual(audit.beforeSummary, { issueType: "CLEAN_ONLY" });
+  assert.deepEqual(audit.afterSummary, { issueType: "SOFTWARE_SYSTEM" });
+  assert.equal(
+    (await repairActivityStaffService.getBoard(ACTIVITY_ID, staffActor)).queue.find(
+      (row) => row.id === first.id,
+    )?.issueType,
+    "SOFTWARE_SYSTEM",
+  );
+  const withdrawn = await postWithdraw(first.id);
+  assert.equal(withdrawn.status, 200);
+  assert.equal((withdrawn.json.data as { issueType: string }).issueType, "SOFTWARE_SYSTEM");
+  const memberActor = { ...staffActor, permissions: permissionsForRoles(["MEMBER"]) };
+  await repairActivityStaffService.checkIn(ACTIVITY_ID, [first.id], memberActor);
+  const served = await repairActivityStaffService.serve(ACTIVITY_ID, first.id, memberActor);
+  const record = await db.repairRecord.findUniqueOrThrow({
+    where: { id: served.repairRecordId },
+    include: { category: true },
+  });
+  assert.equal(record.category?.code, "SYSTEM");
+  assert.equal(record.deviceModel, first.deviceModel);
+  await db.repairRecord.update({ where: { id: record.id }, data: { deletedAt: new Date() } });
+});
+
+dbTest("签到重试：相同类型 / 无更新幂等；不同类型整批回滚，不重复类型审计", async () => {
+  const db = getDb();
+  const row = await checkInFixture();
+  const updates = [{ registrationId: row.id, issueType: "OTHER" }];
+  assert.equal((await postCheckIn([row.id], staffCookie, updates)).status, 200);
+  const saved = await db.repairActivityRegistration.findUniqueOrThrow({ where: { id: row.id } });
+  assert.equal((await postCheckIn([row.id], staffCookie, updates)).status, 200);
+  assert.equal((await postCheckIn([row.id])).status, 200);
+  assert.deepEqual(
+    await db.repairActivityRegistration.findUniqueOrThrow({ where: { id: row.id } }),
+    saved,
+  );
+  assert.equal(
+    await db.auditLog.count({
+      where: { action: "repair_activity.registration_issue_type_updated", targetId: row.id },
+    }),
+    1,
+  );
+  const fresh = await checkInFixture();
+  const count = await db.auditLog.count({ where: { actorUserId: STAFF_USER_ID } });
+  const conflict = await postCheckIn([fresh.id, row.id], staffCookie, [
+    { registrationId: fresh.id, issueType: "SOFTWARE_SYSTEM" },
+    { registrationId: row.id, issueType: "CLEAN_PASTE" },
+  ]);
+  assert.equal(conflict.status, 409);
+  assert.equal(errorCodeOf(conflict.json), "ACTIVITY_REGISTRATION_STATE_INVALID");
+  assert.deepEqual(
+    await db.repairActivityRegistration.findUniqueOrThrow({ where: { id: fresh.id } }),
+    fresh,
+  );
+  assert.deepEqual(
+    await db.repairActivityRegistration.findUniqueOrThrow({ where: { id: row.id } }),
+    saved,
+  );
+  assert.equal(await db.auditLog.count({ where: { actorUserId: STAFF_USER_ID } }), count);
+});
+
+dbTest("空 updates / 显式相同类型保留当前值，不产生类型变更审计", async () => {
+  const db = getDb();
+  const row = await checkInFixture({ issueType: "SOFTWARE_SYSTEM" });
+  const unchanged = await checkInFixture();
+  const result = await postCheckIn([row.id, unchanged.id], staffCookie, []);
+  assert.equal(result.status, 200);
+  assert.equal(
+    (await db.repairActivityRegistration.findUniqueOrThrow({ where: { id: row.id } })).issueType,
+    "SOFTWARE_SYSTEM",
+  );
+  const same = await checkInFixture();
+  assert.equal(
+    (
+      await postCheckIn([same.id], staffCookie, [
+        { registrationId: same.id, issueType: same.issueType },
+      ])
+    ).status,
+    200,
+  );
+  assert.equal(
+    await db.auditLog.count({
+      where: {
+        action: "repair_activity.registration_issue_type_updated",
+        targetId: { in: [row.id, unchanged.id, same.id] },
+      },
+    }),
+    0,
+  );
+});
+
+dbTest("批量无效客户：不存在 / 跨活动 / 软删 / 已接待均回滚前面的状态、类型与审计", async () => {
+  const db = getDb();
+  for (const invalid of [
+    { id: randomUUID(), code: "ACTIVITY_REGISTRATION_NOT_FOUND" },
+    {
+      id: (await checkInFixture({ activityId: OTHER_ACTIVITY_ID })).id,
+      code: "ACTIVITY_REGISTRATION_NOT_FOUND",
+    },
+    {
+      id: (await checkInFixture({ deletedAt: new Date() })).id,
+      code: "ACTIVITY_REGISTRATION_NOT_FOUND",
+    },
+    {
+      id: (await checkInFixture({ status: "SERVED" })).id,
+      code: "ACTIVITY_REGISTRATION_STATE_INVALID",
+    },
+  ]) {
+    const valid = await checkInFixture();
+    const count = await db.auditLog.count({ where: { actorUserId: STAFF_USER_ID } });
+    const result = await postCheckIn([valid.id, invalid.id], staffCookie, [
+      { registrationId: valid.id, issueType: "OTHER" },
+    ]);
+    assert.equal(errorCodeOf(result.json), invalid.code);
+    assert.deepEqual(
+      await db.repairActivityRegistration.findUniqueOrThrow({ where: { id: valid.id } }),
+      valid,
+    );
+    assert.equal(await db.auditLog.count({ where: { actorUserId: STAFF_USER_ID } }), count);
+  }
+});
+
+dbTest("并发类型签到：只有第一份提交生效，第二份不能覆盖已入队客户", async () => {
+  const db = getDb();
+  const row = await checkInFixture();
+  const results = await Promise.all(
+    ["OTHER", "SOFTWARE_SYSTEM"].map((issueType) =>
+      postCheckIn([row.id], staffCookie, [{ registrationId: row.id, issueType }]),
+    ),
+  );
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+  const winner = results.find((result) => result.status === 200)!;
+  const saved = await db.repairActivityRegistration.findUniqueOrThrow({ where: { id: row.id } });
+  assert.equal(
+    saved.issueType,
+    (winner.json.data as { checkedIn: Array<{ issueType: string }> }).checkedIn[0].issueType,
+  );
+  assert.equal(
+    await db.auditLog.count({
+      where: { action: "repair_activity.registration_issue_type_updated", targetId: row.id },
+    }),
+    1,
+  );
+});
+
+dbTest("真实签到路由拒绝错误 updates，权限 / 出勤 / 截止闸门不允许写类型", async () => {
+  const db = getDb();
+  const row = await checkInFixture();
+  const second = await checkInFixture();
+  const updates = [{ registrationId: row.id, issueType: "OTHER" }];
+  const auditCount = await db.auditLog.count({ where: { actorUserId: STAFF_USER_ID } });
+  for (const invalid of [
+    null,
+    {},
+    "x",
+    [null],
+    [{ registrationId: row.id, issueType: "BAD" }],
+    [{ registrationId: randomUUID(), issueType: "OTHER" }],
+    [...updates, ...updates],
+    Array(3).fill(updates[0]),
+  ]) {
+    const result = await postCheckIn([row.id, second.id], staffCookie, invalid);
+    assert.equal(result.status, 400, JSON.stringify(result.json));
+    assert.equal(errorCodeOf(result.json), "VALIDATION_FAILED");
+  }
+  const absent = await postCheckIn([row.id], absentCookie, updates);
+  assert.equal(errorCodeOf(absent.json), "ACTIVITY_ATTENDANCE_REQUIRED");
+  assert.equal((await postCheckIn([row.id], "", updates)).status, 401);
+  await assert.rejects(
+    () =>
+      repairActivityStaffService.checkIn(
+        ACTIVITY_ID,
+        [row.id],
+        { ...staffActor, permissions: [] },
+        [{ registrationId: row.id, issueType: "OTHER" }],
+      ),
+    { code: "FORBIDDEN" },
+  );
+  await db.memberProfile.update({ where: { id: STAFF_PROFILE_ID }, data: { status: "REVOKED" } });
+  try {
+    await assert.rejects(
+      () =>
+        repairActivityStaffService.checkIn(ACTIVITY_ID, [row.id], staffActor, [
+          { registrationId: row.id, issueType: "OTHER" },
+        ]),
+      { code: "MEMBER_REQUIRED" },
+    );
+  } finally {
+    await db.memberProfile.update({ where: { id: STAFF_PROFILE_ID }, data: { status: "ACTIVE" } });
+  }
+  const activity = await db.repairActivity.findUniqueOrThrow({ where: { id: ACTIVITY_ID } });
+  await db.repairActivity.update({
+    where: { id: ACTIVITY_ID },
+    data: { signupClosesAt: new Date(Date.now() + 60_000) },
+  });
+  try {
+    assert.equal(
+      errorCodeOf((await postCheckIn([row.id], staffCookie, updates)).json),
+      "ACTIVITY_NOT_OPEN",
+    );
+  } finally {
+    await db.repairActivity.update({
+      where: { id: ACTIVITY_ID },
+      data: { signupClosesAt: activity.signupClosesAt },
+    });
+  }
+  assert.deepEqual(
+    await db.repairActivityRegistration.findUniqueOrThrow({ where: { id: row.id } }),
+    row,
+  );
+  assert.equal(await db.auditLog.count({ where: { actorUserId: STAFF_USER_ID } }), auditCount);
 });
 
 dbTest("签到入队成功：状态与 checkedInAt 落库，签到审计记录本次 registrationIds", async () => {
@@ -454,7 +720,7 @@ dbTest("报名未截止：出勤、签到、接待均拒绝，已有出勤也不
   try {
     for (const phase of ["OPEN", "FULL", "UPCOMING"] as const) {
       const count = await db.repairActivityRegistration.count({
-        where: { activityId: ACTIVITY_ID },
+        where: { activityId: ACTIVITY_ID, deletedAt: null },
       });
       await db.repairActivity.update({
         where: { id: ACTIVITY_ID },

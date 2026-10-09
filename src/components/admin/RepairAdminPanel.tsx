@@ -10,6 +10,7 @@ import { adminCopy, adminShared } from "@/config/admin";
 import { repairResultLabels, repairStatusLabels } from "@/config/repairs";
 import { adminFetch, prefetchAdmin } from "@/features/admin/admin-client";
 import { sortParam } from "@/lib/api/list-query";
+import { createIdempotencyKey } from "@/lib/idempotency-key";
 import { AdminBatchTools } from "@/components/admin/AdminBatchTools";
 import { AdminListToolbar } from "@/components/admin/AdminListToolbar";
 import { AdminListEnd, useAdminList } from "@/components/admin/useAdminList";
@@ -151,7 +152,7 @@ export function RepairAdminPanel() {
           decision,
           note: rejectNote.trim() || undefined,
           // 每次提交一个新批次键；服务端按 `${key}:${recordId}` 派生成各记录的幂等键。
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: createIdempotencyKey(),
         },
       },
     );

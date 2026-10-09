@@ -1,15 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AdminToast, type AdminToastMessage } from "@/components/admin/AdminToast";
 import { formatShanghaiDateTime } from "@/components/repair-activities/activity-format";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { repairStatusLabels } from "@/config/repairs";
-import { memberRepairActivitiesCopy } from "@/config/repair-activities";
-import { canOperateActivityStaff } from "@/features/repair-activities/repair-activity-validation";
+import { memberRepairActivitiesCopy, repairActivitiesPage } from "@/config/repair-activities";
+import {
+  canOperateActivityStaff,
+  sortQueueByCheckedInAt,
+  type RepairActivityIssueType,
+} from "@/features/repair-activities/repair-activity-validation";
 import type {
   StaffBoardView,
   StaffRegistrationView,
@@ -24,11 +29,18 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [board, setBoard] = useState<StaffBoardView | null>(null);
   const [message, setMessage] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<AdminToastMessage | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [withdrawTarget, setWithdrawTarget] = useState<StaffRegistrationView | null>(null);
   const [checkInConfirmOpen, setCheckInConfirmOpen] = useState(false);
+  const [checkInRows, setCheckInRows] = useState<StaffRegistrationView[]>([]);
+  const [issueTypeDrafts, setIssueTypeDrafts] = useState<Record<string, RepairActivityIssueType>>(
+    {},
+  );
+  const [checkInError, setCheckInError] = useState("");
+  const checkInPending = useRef(false);
+  const hasBoard = useRef(false);
   /** 全局接单拦截弹层（issue #79 第 6 项）：点击「接待」命中未完成草稿时出现，不发请求。 */
   const [pendingNotice, setPendingNotice] = useState<StaffServeDraft | null>(null);
 
@@ -44,20 +56,23 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
         error?: { message?: string };
       };
       if (!json.success || !json.data) {
-        setState("error");
-        setMessage(json.error?.message ?? copy.loadFailed);
-        return null;
+        throw new Error(json.error?.message ?? copy.loadFailed);
       }
       setBoard(json.data);
+      hasBoard.current = true;
       setSelected(new Set());
       setState("ready");
       return json.data;
-    } catch {
-      setState("error");
-      setMessage(copy.loadFailed);
+    } catch (error) {
+      if (hasBoard.current) {
+        setMessage(copy.refreshFailed);
+      } else {
+        setState("error");
+        setMessage(error instanceof Error ? error.message : copy.loadFailed);
+      }
       return null;
     }
-  }, [activityId, copy.loadFailed]);
+  }, [activityId, copy.loadFailed, copy.refreshFailed]);
 
   useEffect(() => {
     void load();
@@ -103,34 +118,79 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       setMessage(result.message);
       return;
     }
-    setToast(copy.attendSuccess);
+    setToast({ text: copy.attendSuccess, tone: "success" });
     await load();
   }
 
   function openCheckInConfirm() {
-    if (selected.size === 0) {
+    if (busy !== null || checkInPending.current) return;
+    const rows = board?.eligible.filter((row) => selected.has(row.id)) ?? [];
+    if (rows.length === 0) {
       setMessage(copy.selectNone);
       return;
     }
+    setCheckInRows(rows);
+    setIssueTypeDrafts(Object.fromEntries(rows.map((row) => [row.id, row.issueType])));
+    setCheckInError("");
     setCheckInConfirmOpen(true);
   }
 
+  function closeCheckInConfirm() {
+    if (checkInPending.current) return;
+    setCheckInConfirmOpen(false);
+    setCheckInRows([]);
+    setIssueTypeDrafts({});
+    setCheckInError("");
+  }
+
   async function confirmCheckIn() {
+    if (checkInPending.current || busy !== null || checkInRows.length === 0) return;
+    checkInPending.current = true;
     setBusy("check-in");
     setToast(null);
     setMessage("");
+    setCheckInError("");
+    const issueTypeUpdates = checkInRows
+      .filter((row) => issueTypeDrafts[row.id] !== row.issueType)
+      .map((row) => ({ registrationId: row.id, issueType: issueTypeDrafts[row.id] }));
     const result = await postJson<{ checkedIn: StaffRegistrationView[] }>(
       `/api/v1/member/repair-activities/${activityId}/check-in`,
-      { registrationIds: [...selected] },
+      {
+        registrationIds: checkInRows.map((row) => row.id),
+        ...(issueTypeUpdates.length ? { issueTypeUpdates } : {}),
+      },
     );
-    setBusy(null);
     if (!result.ok) {
-      setMessage(result.message);
+      setCheckInError(result.message);
+      checkInPending.current = false;
+      setBusy(null);
       return;
     }
     setCheckInConfirmOpen(false);
-    setToast(copy.checkInSuccess);
-    await load();
+    setCheckInRows([]);
+    setIssueTypeDrafts({});
+    setSelected(new Set());
+    // 即使后续刷新失败，也展示已经提交成功的队列及其保存后的类型。
+    setBoard((current) => {
+      if (!current) return current;
+      const savedIds = new Set(result.data.checkedIn.map((row) => row.id));
+      return {
+        ...current,
+        eligible: current.eligible.filter((row) => !savedIds.has(row.id)),
+        queue: sortQueueByCheckedInAt([
+          ...current.queue.filter((row) => !savedIds.has(row.id)),
+          ...result.data.checkedIn,
+        ]),
+      };
+    });
+    setToast({
+      text: issueTypeUpdates.length ? copy.checkInUpdatedSuccess : copy.checkInSuccess,
+      tone: "success",
+    });
+    const fresh = await load();
+    if (!fresh) setMessage(copy.checkInRefreshFailed);
+    checkInPending.current = false;
+    setBusy(null);
   }
 
   async function confirmWithdraw() {
@@ -149,7 +209,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       return;
     }
     setWithdrawTarget(null);
-    setToast(copy.withdrawSuccess);
+    setToast({ text: copy.withdrawSuccess, tone: "neutral" });
     await load();
   }
 
@@ -174,7 +234,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       setMessage(result.message);
       return;
     }
-    setToast(copy.serveSuccess);
+    setToast({ text: copy.serveSuccess, tone: "success" });
     await load();
   }
 
@@ -220,7 +280,6 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
   const opsDisabled = !staffOpen || !board.attended || busy !== null;
   const withdrawBusy = withdrawTarget ? busy === `withdraw:${withdrawTarget.id}` : false;
   const checkInBusy = busy === "check-in";
-  const selectedRows = board.eligible.filter((row) => selected.has(row.id));
 
   return (
     <div className="activity-board">
@@ -247,16 +306,10 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
           <p role="status">{staffOpen ? copy.attendPrompt : copy.signupNotClosed}</p>
         </Card>
       ) : null}
-      {message ? (
-        <p className="admin-status admin-status--error" role="alert">
-          {message}
-        </p>
-      ) : null}
-      {toast ? (
-        <p className="admin-status admin-status--success" role="status">
-          {toast}
-        </p>
-      ) : null}
+      <p className="admin-status activity-board__feedback" role="alert">
+        {message}
+      </p>
+      <AdminToast toast={toast} onDismiss={() => setToast(null)} />
 
       <div className="activity-board__panes">
         <Card className="activity-board__pane repair-panel">
@@ -292,7 +345,10 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
             </ul>
           )}
           <div className="activity-board__actions">
-            <p className="muted">{copy.selectHint}</p>
+            <div>
+              <p className="muted m-0">{copy.selectHint}</p>
+              <p className="text-ink-3 m-0 text-xs">{copy.checkInStaffReminder}</p>
+            </div>
             <Button
               variant="solid"
               onClick={openCheckInConfirm}
@@ -413,21 +469,51 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
           cancelLabel={copy.checkInCancel}
           confirmLabel={checkInBusy ? copy.checkingIn : copy.checkInConfirm}
           busy={checkInBusy}
-          onClose={() => {
-            if (!checkInBusy) setCheckInConfirmOpen(false);
-          }}
+          onClose={closeCheckInConfirm}
           onConfirm={() => void confirmCheckIn()}
         >
           <p>{copy.checkInConfirmHint}</p>
-          <ul className="admin-plain-list">
-            {selectedRows.map((row) => (
-              <li key={row.id}>
-                <strong>
-                  {row.name} · {row.phoneMasked}
-                </strong>
+          <p className="text-ink-3 text-xs">{copy.checkInStaffReminder}</p>
+          <ol className="activity-board__list">
+            {checkInRows.map((row, index) => (
+              <li key={row.id} className="activity-board__row">
+                <div>
+                  <span className="text-ink-3 text-xs">{index + 1}. </span>
+                  <strong>{row.name}</strong> · {row.phoneMasked}
+                </div>
+                {row.deviceModel ? (
+                  <p className="muted m-0">
+                    {copy.deviceModel} {row.deviceModel}
+                  </p>
+                ) : null}
+                <div className="field">
+                  <label className="field__label" htmlFor={`check-in-issue-${row.id}`}>
+                    {row.name} · {copy.issueType}
+                  </label>
+                  <select
+                    id={`check-in-issue-${row.id}`}
+                    className="field__input"
+                    value={issueTypeDrafts[row.id]}
+                    disabled={checkInBusy}
+                    onChange={(event) => {
+                      if (checkInPending.current) return;
+                      const issueType = event.target.value as RepairActivityIssueType;
+                      setIssueTypeDrafts((drafts) => ({ ...drafts, [row.id]: issueType }));
+                    }}
+                  >
+                    {repairActivitiesPage.issueTypes.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </li>
             ))}
-          </ul>
+          </ol>
+          <p className="admin-status activity-board__feedback" role="alert">
+            {checkInError}
+          </p>
         </ConfirmDialog>
       ) : null}
 

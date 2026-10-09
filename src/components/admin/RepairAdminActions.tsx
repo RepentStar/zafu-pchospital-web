@@ -12,6 +12,7 @@ import { adminCopy, adminShared } from "@/config/admin";
 import { repairFieldLimits, repairResultLabels, repairStatusLabels } from "@/config/repairs";
 import { adminFetch } from "@/features/admin/admin-client";
 import { shanghaiToday } from "@/lib/shanghai-date";
+import { createIdempotencyKey } from "@/lib/idempotency-key";
 import { RepairResult } from "@/types/contracts";
 import type {
   RepairCategoryView,
@@ -54,7 +55,7 @@ export function RepairAdminActions({
   const [photos, setPhotos] = useState<RepairPhotoView[] | null>(null);
   /** 已经确定读不出字节的照片 id（文件被清理、存储路径变更等）。 */
   const [brokenPhotos, setBrokenPhotos] = useState<string[]>([]);
-  const idempotencyKey = useRef(crypto.randomUUID());
+  const idempotencyKey = useRef(createIdempotencyKey());
 
   useEffect(() => {
     let cancelled = false;
@@ -105,7 +106,7 @@ export function RepairAdminActions({
       decision === "APPROVED" ? "success" : "neutral",
     );
     if (ok) {
-      idempotencyKey.current = crypto.randomUUID();
+      idempotencyKey.current = createIdempotencyKey();
       setNote("");
       setRejecting(false);
     }

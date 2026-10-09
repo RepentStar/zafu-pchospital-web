@@ -17,6 +17,8 @@ import {
   type RepairActivityIssueType,
   type RepairActivityStatus,
   assertValidIssueType,
+  validateCheckInIssueTypeUpdates,
+  type StaffCheckInIssueTypeUpdate,
 } from "@/features/repair-activities/repair-activity-validation";
 import { createServeDraftForActivity } from "@/features/repairs/repair-service";
 import { repairRepository } from "@/features/repairs/repair-repository";
@@ -368,6 +370,7 @@ export const repairActivityStaffService = {
     activityId: string,
     registrationIds: string[],
     actor: AuthorizedActor,
+    issueTypeUpdates: StaffCheckInIssueTypeUpdate[] = [],
   ): Promise<{ checkedIn: StaffRegistrationView[] }> {
     const member = await requireStaffMember(actor);
     await loadActivityOrThrow(activityId);
@@ -382,6 +385,12 @@ export const repairActivityStaffService = {
     if (uniqueIds.length > 100) {
       throw new AppError("VALIDATION_FAILED", "单次最多签到 100 条");
     }
+    const updates = new Map(
+      validateCheckInIssueTypeUpdates(issueTypeUpdates, uniqueIds).map((item) => [
+        item.registrationId,
+        item.issueType,
+      ]),
+    );
 
     return inSerializableTransaction(async (tx) => {
       await requireStaffOpen(tx, activityId);
@@ -396,6 +405,12 @@ export const repairActivityStaffService = {
           throw new AppError("ACTIVITY_REGISTRATION_NOT_FOUND", "报名记录不存在");
         }
         if (reg.status === "CHECKED_IN") {
+          if (updates.has(registrationId) && updates.get(registrationId) !== reg.issueType) {
+            throw new AppError(
+              "ACTIVITY_REGISTRATION_STATE_INVALID",
+              "已入队客户不可在签到重试中修改故障类型",
+            );
+          }
           checkedIn.push(toStaffReg(reg));
           continue;
         }
@@ -407,8 +422,25 @@ export const repairActivityStaffService = {
         }
         const updated = await tx.repairActivityRegistration.update({
           where: { id: registrationId },
-          data: { status: "CHECKED_IN", checkedInAt: now },
+          data: {
+            status: "CHECKED_IN",
+            checkedInAt: now,
+            ...(updates.has(registrationId) ? { issueType: updates.get(registrationId) } : {}),
+          },
         });
+        if (updated.issueType !== reg.issueType) {
+          await appendAuditLog(tx, {
+            actor,
+            actorType: "USER",
+            actorUserId: actor.userId,
+            action: "repair_activity.registration_issue_type_updated",
+            targetType: "RepairActivityRegistration",
+            targetId: registrationId,
+            result: "SUCCESS",
+            before: { issueType: reg.issueType },
+            after: { issueType: updated.issueType },
+          });
+        }
         checkedIn.push(toStaffReg(updated));
       }
 

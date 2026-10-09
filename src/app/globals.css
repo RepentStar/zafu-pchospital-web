@@ -7518,6 +7518,12 @@ html[data-theme="black-yellow"] {
   align-items: center;
   gap: var(--s-3);
 }
+/* 常驻错误区域：反馈原地替换，长错误可滚动，不挤动列表或确认按钮。 */
+.activity-board__feedback {
+  block-size: 3lh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
 .activity-board__panes {
   display: grid;
   min-width: 0;

@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {
+  bodyCheckInIssueTypeUpdates,
+  bodyRegistrationIds,
+} from "../../src/features/repair-activities/repair-activity-http";
 
 import {
   canCheckInRegistration,
@@ -10,7 +14,66 @@ import {
   mapIssueTypeToCategoryCode,
   shanghaiCalendarDay,
   sortQueueByCheckedInAt,
+  validateCheckInIssueTypeUpdates,
 } from "../../src/features/repair-activities/repair-activity-validation";
+
+test("签到类型更新：兼容缺省 / 空数组，按规范化后的本批 ID 校验", () => {
+  const ids = bodyRegistrationIds({ registrationIds: [" a ", "", "a", "b"] });
+  assert.deepEqual(bodyCheckInIssueTypeUpdates({}, ids), []);
+  assert.deepEqual(bodyCheckInIssueTypeUpdates({ issueTypeUpdates: [] }, ids), []);
+  assert.deepEqual(
+    bodyCheckInIssueTypeUpdates(
+      {
+        issueTypeUpdates: [
+          { registrationId: " a ", issueType: "CLEAN_ONLY" },
+          { registrationId: "b", issueType: "OTHER" },
+        ],
+      },
+      ids,
+    ),
+    [
+      { registrationId: "a", issueType: "CLEAN_ONLY" },
+      { registrationId: "b", issueType: "OTHER" },
+    ],
+  );
+});
+
+test("签到类型更新：拒绝非法形状、类型、重复、夹带与超限；Service 共用校验", () => {
+  for (const value of [
+    null,
+    "x",
+    {},
+    [null],
+    [[]],
+    ["x"],
+    [{}],
+    [{ registrationId: 1, issueType: "OTHER" }],
+    [{ registrationId: " ", issueType: "OTHER" }],
+    [{ registrationId: "c", issueType: "OTHER" }],
+    [{ registrationId: "a", issueType: "INVALID" }],
+    [{ registrationId: "a", issueType: null }],
+    [
+      { registrationId: "a", issueType: "OTHER" },
+      { registrationId: "a", issueType: "CLEAN_ONLY" },
+    ],
+    Array(3).fill({ registrationId: "a", issueType: "OTHER" }),
+  ]) {
+    assert.throws(() => validateCheckInIssueTypeUpdates(value, ["a", "b"]), {
+      code: "VALIDATION_FAILED",
+    });
+    assert.throws(() => bodyCheckInIssueTypeUpdates({ issueTypeUpdates: value }, ["a", "b"]), {
+      code: "VALIDATION_FAILED",
+    });
+  }
+  assert.throws(
+    () =>
+      validateCheckInIssueTypeUpdates(
+        [],
+        Array.from({ length: 101 }, (_, i) => String(i)),
+      ),
+    { code: "VALIDATION_FAILED" },
+  );
+});
 
 test("报名截止闸门：截止前禁止出勤、签到与接待，截止时刻起开放", () => {
   const deadline = new Date("2026-10-08T02:00:00.000Z");

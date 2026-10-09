@@ -475,6 +475,35 @@ DELETE /api/v1/member/notifications/:id
 - 服务端在事务中锁定活动并读取最新截止时间；看板禁用相应按钮与签到勾选，保留列表可查看。
 - 撤回排队仍沿用原有权限、出勤与报名状态校验，允许修正历史误签到。
 
+### 签到时核对与修改故障类型
+
+`POST /api/v1/member/repair-activities/:id/check-in` 接受
+`{ registrationIds: string[], issueTypeUpdates?: { registrationId: string, issueType: RepairActivityIssueType }[] }`。
+响应保持 `{ checkedIn: StaffRegistrationView[] }`，返回保存后的 `issueType` 和 `issueTypeLabel`，
+使用统一 API 信封与 requestId。缺省或空 updates 兼容原来的只签到请求。
+
+- 仍需同源 Cookie 请求、有效账号 / 成员、`activity:staff`（MEMBER / ADMIN）及本场出勤，
+  报名截止闸门不变。「普通成员无需签到，交给现场管理员」是分工提醒，不是新增权限限制。
+- registrationIds 去空、去重后为 1–100 条。updates 必须是数组，每项 ID 为有效非空字符串、
+  属于本批且不能重复；数量不能超过本批客户数，类型必须是现有四种枚举。
+  null / 错误形状 / 非本批 ID / 重复 / 无效类型 / 超限均为 400 `VALIDATION_FAILED`。
+- 锁定活动的 Serializable 事务同时更新 REGISTERED 客户的明确类型修改、CHECKED_IN 状态、
+  checkedInAt 和审计。未附更新的客户保留事务读取的当前类型；一条不存在、跨活动、软删除
+  （404 `ACTIVITY_REGISTRATION_NOT_FOUND`）或不可签到（409 `ACTIVITY_REGISTRATION_STATE_INVALID`）
+  时整批回滚，包含已经处理的类型、状态与审计。
+- CHECKED_IN 重试没有更新或更新与当前类型相同时幂等返回，不重置时间或队列位置；
+  更新不同类型则 409 `ACTIVITY_REGISTRATION_STATE_INVALID`，SERVED 始终拒绝。
+- 保留 `repair_activity.registrations_checked_in` 摘要；真正的类型变更逐条写 USER 审计
+  `repair_activity.registration_issue_type_updated`，actorUserId 为当前成员账号，before / after
+  只记 issueType；无实际变更及幂等重试不重复写类型审计，不记录姓名、完整电话或凭证。
+- 成员看板在确认弹窗中按待签到列表顺序核对姓名、脱敏电话、已填机型与类型，只在最终确认时
+  一次提交快照 ID 及实际编辑项。取消丢弃草稿，失败保留草稿。成功后刷新失败保留已渲染看板，
+  明确提示签到成功与刷新失败，成功反馈使用不占布局的浮层。
+
+影响范围：成员看板 → check-in Route → Staff Service；原三参数 Service 调用
+（设备 / 草稿集成测试）与旧请求（看板集成测试）保持兼容。公开查询、后台报名、board 与 serve
+共用保存后的报名 issueType；不新增 Schema、Migration、公共枚举或权限。
+
 ### 接待落草稿与机主字段（issue #79 第 6 项）
 
 **serve 行为变更**：
