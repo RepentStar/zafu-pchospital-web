@@ -1,4 +1,7 @@
-import { bodyRegistrationIds } from "@/features/repair-activities/repair-activity-http";
+import {
+  bodyRegistrationIds,
+  bodyCheckInIssueTypeUpdates,
+} from "@/features/repair-activities/repair-activity-http";
 import { repairActivityStaffService } from "@/features/repair-activities/repair-activity-staff-service";
 import { AppError } from "@/lib/api/errors";
 import { apiFailure, apiSuccess } from "@/lib/api/response";
@@ -16,8 +19,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const id = (await params).id;
     if (!id) throw new AppError("VALIDATION_FAILED", "活动 ID 无效");
     const body = (await request.json()) as Record<string, unknown>;
+    const registrationIds = bodyRegistrationIds(body);
     return apiSuccess(
-      await repairActivityStaffService.checkIn(id, bodyRegistrationIds(body), actor),
+      await repairActivityStaffService.checkIn(
+        id,
+        registrationIds,
+        actor,
+        bodyCheckInIssueTypeUpdates(body, registrationIds),
+      ),
       requestId,
     );
   } catch (error) {

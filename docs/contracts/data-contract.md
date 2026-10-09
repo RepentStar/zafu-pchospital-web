@@ -121,6 +121,18 @@ Repository / Service 的默认读取必须加 `deletedAt: null`。身份采用�
 - 后续所有正式统计必须统一使用 `status = APPROVED AND deleted_at IS NULL`。查询条件的代码事实来源为
   `approvedRepairWhere()`；M2 分析入口 `listApprovedRepairsForAnalytics()` 与 M3 成员摘要均在其上追加范围条件。
 
+## 活动签到类型修正
+
+- `repair_activity_registrations.issue_type` 继续保存现有四种类型，不新增字段或枚举。
+  有效且已出勤的成员持 `activity:staff` 时，可在签到事务内明确修正 REGISTERED 报名的类型；
+  未传修改项时保留当前类型，不用弹窗快照覆盖其他修改。
+- 类型、CHECKED_IN、checkedInAt 与所有审计在锁定活动的 Serializable 事务中整批提交或回滚。
+  已 CHECKED_IN 的相同类型重试不重置时间 / 队列顺序；不同类型修改及 SERVED 均拒绝。
+- 真正的类型变更逐条复用 USER 审计 `repair_activity.registration_issue_type_updated`，
+  actorUserId 为成员账号，before / after 只记 issueType；无变更或幂等重试不重复记录类型审计。
+- 撤回排队只恢复 REGISTERED、清空 checkedInAt，保留核对后的类型；公开查询、后台与 board
+  读取同一报名行，后续 serve 用该类型映射维修草稿分类。
+
 ## M3 技能标签契约
 
 - `skills` 用稳定 `code` 幂等 Seed，初始 8 项：`WINDOWS`、`HARDWARE`、`NETWORK`、`LINUX`、
