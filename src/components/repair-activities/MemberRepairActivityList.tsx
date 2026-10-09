@@ -34,7 +34,11 @@ export function MemberRepairActivityList() {
           setMessage(json.error?.message ?? copy.loadFailed);
           return;
         }
-        setItems(json.data);
+        setItems(
+          [...json.data].sort(
+            (a, b) => new Date(b.activityAt).getTime() - new Date(a.activityAt).getTime(),
+          ),
+        );
         setState("ready");
       } catch {
         if (!cancelled) {
