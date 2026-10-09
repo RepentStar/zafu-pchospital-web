@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { memberRepairActivitiesCopy } from "@/config/repair-activities";
 import {
@@ -70,37 +70,45 @@ export function MemberRepairActivityList() {
     <ul className="activity-list">
       {items.map((item) => (
         <li key={item.id}>
-          <Link href={`/member/repair-activities/${item.id}`} className="activity-card__link">
-            <Card className="activity-card repair-panel">
-              <div className="activity-card__head">
-                <h2 className="activity-card__title">{item.title}</h2>
-                <span
-                  className={item.status === "CLOSED" ? "admin-tag admin-tag--accent" : "admin-tag"}
-                >
-                  {repairActivityStatusLabels[item.status as RepairActivityStatus]}
-                </span>
+          <Card className="activity-card repair-panel">
+            <div className="activity-card__head">
+              <h2 className="activity-card__title">{item.title}</h2>
+              <span
+                className={item.status === "CLOSED" ? "admin-tag admin-tag--accent" : "admin-tag"}
+              >
+                {repairActivityStatusLabels[item.status as RepairActivityStatus]}
+              </span>
+            </div>
+            <dl className="activity-card__meta">
+              <div>
+                <dt>{copy.activityAt}</dt>
+                <dd>{formatShanghaiDateTime(item.activityAt)}</dd>
               </div>
-              <dl className="activity-card__meta">
-                <div>
-                  <dt>{copy.activityAt}</dt>
-                  <dd>{formatShanghaiDateTime(item.activityAt)}</dd>
-                </div>
-                <div>
-                  <dt>名额</dt>
-                  <dd>
-                    {copy.capacity
-                      .replace("{registered}", String(item.registeredCount))
-                      .replace("{capacity}", String(item.capacity))}
-                  </dd>
-                </div>
-                <div>
-                  <dt>出勤</dt>
-                  <dd>{item.attended ? copy.attended : copy.notAttended}</dd>
-                </div>
-              </dl>
-              <p className="activity-card__cta muted">{copy.openBoard}</p>
-            </Card>
-          </Link>
+              <div>
+                <dt>名额</dt>
+                <dd>
+                  {copy.capacity
+                    .replace("{registered}", String(item.registeredCount))
+                    .replace("{capacity}", String(item.capacity))}
+                </dd>
+              </div>
+              <div>
+                <dt>出勤</dt>
+                <dd>{item.attended ? copy.attended : copy.notAttended}</dd>
+              </div>
+            </dl>
+            <div className="activity-card__footer">
+              <Button
+                href={`/member/repair-activities/${item.id}`}
+                trailingIcon="arrowUpRight"
+                className={`border-line-strong before:hidden ${
+                  item.status === "CLOSED" ? "bg-accent-wash text-accent-deep" : "text-ink"
+                }`}
+              >
+                {copy.openBoard}
+              </Button>
+            </div>
+          </Card>
         </li>
       ))}
     </ul>
