@@ -1,0 +1,11 @@
+[Unit]
+Description=每 30 分钟检查一次文档仓库是否有更新
+
+[Timer]
+OnCalendar=*:0/30
+RandomizedDelaySec=120
+Persistent=true
+Unit=docs-sync.service
+
+[Install]
+WantedBy=timers.target
