@@ -18,7 +18,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     assertSameOrigin(request);
     const ip = context.ipAddress ?? "unknown";
-    enforceRateLimit(repairActivityIpRateLimitKey(ip), 10, 60_000);
+    // IP 只是防刷兜底，主力是手机号（5 次/分钟 + 同场唯一）；30 次/分钟让校园网 NAT 后的正常用户不被误伤。
+    enforceRateLimit(repairActivityIpRateLimitKey(ip), 30, 60_000);
     const body = (await request.json()) as Record<string, unknown>;
     const phoneRaw = String(body.phone ?? "");
     // phone 限流：规范化成功后再按号限；格式错由 service 抛 VALIDATION。
