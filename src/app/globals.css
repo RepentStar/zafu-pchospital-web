@@ -5480,6 +5480,7 @@ html[data-theme="black-yellow"] {
     inset: 0;
     z-index: 96; /* 高于移动端索引浮层（95），窗口必须始终在最上层 */
     display: grid;
+    grid-template-rows: minmax(0, 1fr);
     place-items: center;
     padding: var(--gutter);
   }
@@ -5529,10 +5530,14 @@ html[data-theme="black-yellow"] {
   }
   .admin-modal__body {
     display: grid;
+    /* 表格等可滚动子项保持内容高度，由窗口正文统一承担纵向滚动。 */
+    grid-auto-rows: max-content;
     align-content: start;
+    min-block-size: 0;
     gap: var(--s-6);
     padding: var(--s-5) clamp(1.25rem, 3vw, 2rem) var(--s-6);
     overflow-y: auto;
+    overscroll-behavior-y: contain;
   }
   /* 字段表 + 紧跟其后的说明文字：它们是一组，间距要明显小于段落之间。 */
   .admin-modal__facts {
