@@ -304,7 +304,7 @@ export function MemberAdminPanel() {
     await load();
   }
 
-  /* 重置密码只在成员详情窗口里做：那里有展示一次性密码的内联区块，
+  /* 重置密码只在成员详情窗口里做：那里有展示新密码的内联区块，
      列表里再放一个按钮等于同一件事两处实现（第七轮：列表的操作列整体撤掉）。 */
 
   const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id));

@@ -28,7 +28,19 @@ import type { TableViewSpec } from "@/types/table";
 export type JoinApplicationTableContext = {
   /** 打开报名详情窗口。 */
   onDetail: (id: string) => void;
+  /** 行内「通过」（issue #95）：面板弹二次确认，确认后才提交。 */
+  onApprove: (item: JoinApplicationSummary) => void;
+  /** 有请求在途：行内按钮一并置灰，防连点。 */
+  busy: boolean;
 };
+
+/**
+ * 只有「已提交 / 待面试」可以一键通过（与服务端 `review` 接受的状态一致）；
+ * 其余状态按钮**常驻但置灰** —— 按钮忽隐忽现会让整行宽度跳动。
+ */
+export function canQuickApprove(status: JoinApplicationSummary["status"]): boolean {
+  return status === "SUBMITTED" || status === "INTERVIEW_PENDING";
+}
 
 const copy = adminCopy.recruitment;
 
@@ -97,10 +109,17 @@ export const joinApplicationTableSpec: TableViewSpec<
       key: "actions",
       label: copy.table.actions,
       kind: "readonly",
-      render: (item, _index, { onDetail }) => (
+      render: (item, _index, { busy, onDetail, onApprove }) => (
         <span className="admin-actions">
           <Button variant="ghost" onClick={() => onDetail(item.id)}>
             {copy.action.detail}
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={busy || !canQuickApprove(item.status)}
+            onClick={() => onApprove(item)}
+          >
+            {copy.action.approve}
           </Button>
         </span>
       ),

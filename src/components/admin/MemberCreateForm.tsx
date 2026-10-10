@@ -64,11 +64,11 @@ export function MemberCreateForm({
     form.reset();
     idempotencyKey.current = crypto.randomUUID();
     setSecret(result.data.initializationSecret ?? copy.secretMissing);
-    // 只刷新列表，**不关窗**：初始密码就在下面这段，关掉就等于没发出去。
+    // 只刷新列表，**不关窗**：初始密码就在下面这段；不看清就关掉窗口等于没发出去。
     onCreated();
   }
 
-  /* 结果视图：一行「已创建」+ 一次性初始密码 + 领取提示，动作只剩「完成」。 */
+  /* 结果视图：一行「已创建」+ 初始密码与规则 + 领取提示，动作只剩「完成」。 */
   if (secret) {
     return (
       <div className="admin-form">
@@ -76,7 +76,7 @@ export function MemberCreateForm({
         <p className="admin-status admin-secret">
           <code>{secret}</code>
         </p>
-        <p className="admin-note">{copy.secretOnce}</p>
+        <p className="admin-note">{copy.secretRule}</p>
         <div className="signup__actions">
           <Button variant="solid" icon="check" onClick={onClose}>
             {adminShared.done}

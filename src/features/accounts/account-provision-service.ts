@@ -1,10 +1,10 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { AppError } from "@/lib/api/errors";
 import { appendAuditLog } from "@/lib/audit/audit-service";
 import { getDb } from "@/lib/db/client";
 import { inSerializableTransaction } from "@/lib/db/transaction";
-import { normalizePhone, normalizeQq } from "@/lib/security/normalization";
+import { initialPasswordFromQq, normalizePhone, normalizeQq } from "@/lib/security/normalization";
 import type { AccountProvisionServiceContract, ProvisionResult } from "@/types/contracts";
 import {
   ensureMemberProfile,
@@ -24,7 +24,8 @@ export class AccountProvisionService implements AccountProvisionServiceContract 
     });
     if (existing?.status === "SUCCEEDED") return toResult(existing);
 
-    const initializationSecret = randomBytes(18).toString("base64url");
+    // 初始密码规则（issue #93）：QQ 号后 6 位，5 位老号取整串；在事务里拿到报名记录后再算。
+    let initializationSecret = "";
     try {
       const result = await inSerializableTransaction(async (tx) => {
         const application = await tx.joinApplication.findUnique({ where: { id: applicationId } });
@@ -34,6 +35,7 @@ export class AccountProvisionService implements AccountProvisionServiceContract 
         if (application.status !== "INTERVIEW_PASSED") {
           throw new AppError("STATE_TRANSITION_INVALID", "报名尚未通过面试");
         }
+        initializationSecret = initialPasswordFromQq(application.qqNormalized);
         const provision = await tx.accountProvision.upsert({
           where: {
             sourceType_sourceId: { sourceType: "JOIN_APPLICATION", sourceId: applicationId },

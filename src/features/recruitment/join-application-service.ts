@@ -177,6 +177,37 @@ export class JoinApplicationService implements JoinApplicationServiceContract {
         throw new AppError("RESOURCE_NOT_FOUND", "报名记录不存在");
       }
       if (application.status === "INTERVIEW_PASSED" && input.result === "PASSED") {
+        // 重复提交「通过」不再走状态流转（否则状态回退、重复建发放任务），但**备注不能丢**：
+        // 带备注时按「补记一条面试记录」落库；不带备注才是真正的重复提交，幂等返回。
+        // （issue #97：此前一律直接返回，界面上表现为「填了备注、提示成功、备注却不在」。）
+        const note = cleanOptional(input.internalNote);
+        if (!note) return application;
+        await tx.joinApplicationReview.create({
+          data: {
+            id: randomUUID(),
+            applicationId: application.id,
+            result: input.result,
+            interviewedAt,
+            reviewerUserId: actor.userId!,
+            internalNote: note,
+            createdAt: new Date(),
+          },
+        });
+        await appendAuditLog(tx, {
+          actor,
+          actorType: actor.actorType,
+          actorUserId: actor.userId,
+          action: "join.review.created",
+          targetType: "JoinApplication",
+          targetId: application.id,
+          result: "SUCCESS",
+          before: { status: application.status, provisionStatus: application.provisionStatus },
+          after: {
+            status: application.status,
+            provisionStatus: application.provisionStatus,
+            noteOnly: true,
+          },
+        });
         return application;
       }
       if (application.status !== "SUBMITTED" && application.status !== "INTERVIEW_PENDING") {

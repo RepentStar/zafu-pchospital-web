@@ -425,9 +425,9 @@ export const adminCopy = {
       nickname: "昵称",
       submit: "创建成员",
       optional: "选填",
-      hint: "QQ 号 5–11 位数字；手机号 11 位中国大陆号码。初始密码只在创建成功后显示一次。",
+      hint: "QQ 号 5–11 位数字；手机号 11 位中国大陆号码。初始密码为 QQ 号后 6 位（不足 6 位取全部数字）。",
       created: "成员已创建，请立即把初始密码交给本人：",
-      secretOnce: "初始密码只显示这一次，关闭后无法再次查看，只能重置。",
+      secretRule: "初始密码为成员 QQ 号后 6 位（不足 6 位取全部数字），首次登录后必须修改。",
       /** 服务端没回初始密码时的兜底文案（正常路径不会出现）。 */
       secretMissing: "服务端未返回初始密码，请用「重置密码」重新生成。",
     },
@@ -866,7 +866,13 @@ export const adminCopy = {
       submittedAt: "提交时间",
       actions: "操作",
     },
-    action: { detail: "详情", export: "导出报名数据" },
+    action: { detail: "详情", export: "导出报名数据", approve: "通过" },
+    /** 列表行内「快速通过」（issue #95）：跳过详情窗口，一步完成审核 + 账号发放。 */
+    quickApprove: {
+      title: "通过报名",
+      hint: "通过后立即创建成员账号并自动发放。初始密码为成员 QQ 号后 6 位（不足 6 位取全部数字），首次登录后必须修改。",
+      done: "已通过，账号已发放。",
+    },
     /** 列表工具栏右侧的总数文案；`{count}` 由组件填当前总数。 */
     count: "共 {count} 条报名",
     detail: {
@@ -893,8 +899,9 @@ export const adminCopy = {
       submit: "保存结果",
       saved: "面试结果已登记。",
       passedSaved: "已登记为面试通过，账号发放任务已创建。",
+      noteAppended: "备注已补记到面试记录。",
       notReviewable: "该报名当前不可登记面试结果。",
-      secretNote: "初始密码只显示这一次，请立即交给本人；关闭后只能重置。",
+      secretNote: "初始密码为成员 QQ 号后 6 位（不足 6 位取全部数字）；成员首次登录后必须修改。",
     },
     provision: {
       title: "账号发放",

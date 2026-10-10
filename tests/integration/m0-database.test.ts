@@ -213,6 +213,51 @@ dbTest("面试通过重复执行不创建重复账号、档案或角色", async 
   );
 });
 
+dbTest("已通过的报名再提交「通过」：状态不回流，携带的备注补记为面试记录（issue #97）", async () => {
+  const input = {
+    recruitmentCycle: `NOTE-${randomUUID().slice(0, 8)}`,
+    realName: "补记成员",
+    qq: `6${String(Date.now()).slice(-9)}`,
+    phone: `135${String(Date.now()).slice(-8)}`,
+    privacyConsent: true,
+  };
+  const receipt = await joinApplicationService.submit(input, { requestId: "req_note_submit" });
+  await joinApplicationService.review(
+    {
+      applicationId: receipt.id,
+      result: "PASSED",
+      interviewedAt: new Date().toISOString(),
+      internalNote: "首次登记",
+      idempotencyKey: `note-a-${receipt.id}`,
+    },
+    adminActor,
+  );
+  // 修复前：这一条会被静默丢弃（界面提示成功，备注却不在面试记录里）。
+  const second = await joinApplicationService.review(
+    {
+      applicationId: receipt.id,
+      result: "PASSED",
+      interviewedAt: new Date().toISOString(),
+      internalNote: "补记：技术方向",
+      idempotencyKey: `note-b-${receipt.id}`,
+    },
+    adminActor,
+  );
+  assert.equal(second.status, "INTERVIEW_PASSED", "补记不能改动已通过状态");
+  const detail = await joinApplicationService.get(receipt.id, adminActor);
+  assert.equal(detail.reviews.length, 2, "补记应作为新的一条面试记录落库");
+  const notes = detail.reviews.map((review) => review.internalNote);
+  assert.ok(notes.includes("首次登记"));
+  assert.ok(notes.includes("补记：技术方向"));
+  // 补记不等于重新发放：发放任务仍然只有一条。
+  assert.equal(
+    await getDb().accountProvision.count({
+      where: { sourceType: "JOIN_APPLICATION", sourceId: receipt.id },
+    }),
+    1,
+  );
+});
+
 dbTest("同一码可限次复用且 10 个并发请求不会超卖最后一个名额", async () => {
   const created = await inviteCodeService.create({ maxUses: 1 }, adminActor);
   const attempts = Array.from({ length: 10 }, (_, index) =>
@@ -275,6 +320,8 @@ dbTest("报名通过发放的 QQ 身份可登录，首次改密会轮换并撤�
   });
   assert.equal(reviewed.provisionStatus, "SUCCEEDED");
   assert.ok(reviewed.initializationSecret);
+  // issue #93：初始密码为 QQ 号后 6 位（不足 6 位取整串）。
+  assert.equal(reviewed.initializationSecret, input.qq.slice(-6));
   const login = await authService.login(
     { qq: input.qq, password: reviewed.initializationSecret! },
     { requestId: "req_auth_login", ipAddress: "127.0.0.21" },
