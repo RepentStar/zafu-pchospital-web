@@ -1,6 +1,7 @@
 import { repairFieldLimits } from "@/config/repairs";
 import { AppError } from "@/lib/api/errors";
 import { CN_MOBILE_PATTERN } from "@/lib/security/normalization";
+import { shanghaiToday } from "@/lib/shanghai-date";
 import type { RepairDraftFields, RepairResult } from "@/types/contracts";
 
 export function normalizeDraftFields(input: RepairDraftFields): RepairDraftFields {
@@ -39,7 +40,7 @@ export function validateDraftFields(input: RepairDraftFields): void {
     // 日期范围在草稿阶段就拦：等到提交才报错，用户早就离开了这一页（issue #62 后端3）。
     if (input.repairDate < repairFieldLimits.repairDateMin)
       errors.repairDate = [`维修日期不得早于 ${repairFieldLimits.repairDateMin}`];
-    else if (input.repairDate > currentShanghaiDate()) errors.repairDate = ["维修日期不能晚于今天"];
+    else if (input.repairDate > shanghaiToday()) errors.repairDate = ["维修日期不能晚于今天"];
   }
   if (
     input.durationMinutes != null &&
@@ -77,7 +78,7 @@ export function validateSubmission(record: {
   if (!record.repairDate) errors.repairDate = ["请填写维修日期"];
   else {
     const repairDate = formatShanghaiDate(record.repairDate);
-    if (repairDate > currentShanghaiDate()) errors.repairDate = ["维修日期不能晚于今天"];
+    if (repairDate > shanghaiToday()) errors.repairDate = ["维修日期不能晚于今天"];
     else if (repairDate < repairFieldLimits.repairDateMin)
       errors.repairDate = [`维修日期不得早于 ${repairFieldLimits.repairDateMin}`];
   }
@@ -130,14 +131,6 @@ function isDate(value: string): boolean {
 }
 function isRepairResult(value: unknown): value is RepairResult {
   return value === "COMPLETED" || value === "NOT_COMPLETED";
-}
-function currentShanghaiDate(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
 }
 function formatShanghaiDate(value: Date): string {
   return value.toISOString().slice(0, 10);
