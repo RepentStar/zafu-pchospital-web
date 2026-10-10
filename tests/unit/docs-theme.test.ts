@@ -75,10 +75,10 @@ test("调色板检查读取指定文档版本，阻止颜色漂移与默认深�
     cpSync(path.join(sourceRoot, "theme"), path.join(fixture, "theme"), { recursive: true });
     const config = readFileSync(path.join(sourceRoot, "book.toml"), "utf8");
     writeFileSync(path.join(fixture, "book.toml"), config);
-    const check = () =>
+    const check = (artifactCss?: string) =>
       spawnSync(process.execPath, ["tools/check-theme-palette.mjs"], {
         cwd: projectRoot,
-        env: { ...process.env, DOCS_SOURCE_DIR: fixture },
+        env: { ...process.env, DOCS_SOURCE_DIR: fixture, DOCS_THEME_CSS: artifactCss ?? "" },
         encoding: "utf8",
       });
     assert.equal(check().status, 0);
@@ -89,6 +89,10 @@ test("调色板检查读取指定文档版本，阻止颜色漂移与默认深�
     assert.equal(paletteDrift.status, 1);
     assert.match(paletteDrift.stderr, /--accent 取值不一致/);
     writeFileSync(cssPath, css);
+    const artifactCss = path.join(fixture, "theme/pc-hospital-artifact.css");
+    writeFileSync(artifactCss, css.replace("--pc-accent: #2457ff", "--pc-accent: #000000"));
+    assert.equal(check().status, 0);
+    assert.match(check(artifactCss).stderr, /--accent 取值不一致/);
     writeFileSync(
       path.join(fixture, "book.toml"),
       config.replace('preferred-dark-theme = "coal"', 'preferred-dark-theme = "navy"'),
