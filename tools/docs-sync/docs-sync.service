@@ -1,0 +1,15 @@
+[Unit]
+Description=同步站内文档（ZAFU-PCHospital-Doc gh-pages → public/handbook）
+Documentation=https://github.com/ZAFU-PCHospital/zafu-pchospital-web
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=zafu-web
+Group=zafu-web
+Environment=HOME=/var/lib/docs-sync
+Environment=GIT_TERMINAL_PROMPT=0
+ExecStart=/usr/local/bin/docs-sync
+Nice=10
+IOSchedulingClass=idle
