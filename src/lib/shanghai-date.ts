@@ -6,10 +6,13 @@
  * 就会被 HTML 拦下来。
  */
 export function shanghaiToday(): string {
-  return new Intl.DateTimeFormat("en-CA", {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  }).formatToParts(new Date());
+  // 地区数据会随浏览器 / ICU 版本变化，format() 不保证 YYYY-MM-DD。
+  const value = (type: "year" | "month" | "day") => parts.find((part) => part.type === type)!.value;
+  return `${value("year")}-${value("month")}-${value("day")}`;
 }
