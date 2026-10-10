@@ -10,6 +10,7 @@ import type { AdminToastMessage } from "@/components/admin/AdminToast";
 import { AdminListEnd, useAdminList } from "@/components/admin/useAdminList";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   adminCopy,
   adminShared,
@@ -61,6 +62,8 @@ export function JoinApplicationAdminPanel() {
   const [toast, setToast] = useState<AdminToastMessage | null>(null);
   const [applied, setApplied] = useState(EMPTY_FILTERS);
   const [detailId, setDetailId] = useState<string | null>(null);
+  /** 行内「通过」待确认的报名（issue #95）：非空即弹二次确认。 */
+  const [approving, setApproving] = useState<JoinApplicationSummary | null>(null);
   const [busy, setBusy] = useState(false);
 
   // 取数状态收在 `useAdminList` 里：往下滚动自动接下一页（邮箱式的连续列表，
@@ -143,6 +146,39 @@ export function JoinApplicationAdminPanel() {
       text: copy.export.done.replace("{count}", String(rowCount)),
       tone: "success",
     });
+  }
+
+  /** 行内快速通过（issue #95）：二次确认后提交审核，服务端随即自动创建账号并发放。 */
+  async function confirmApprove() {
+    if (!approving) return;
+    setBusy(true);
+    setProblem("");
+    setToast(null);
+    const result = await adminFetch<JoinApplicationView>(
+      `/api/v1/admin/join-applications/${approving.id}/reviews`,
+      {
+        method: "POST",
+        body: {
+          result: "PASSED",
+          interviewedAt: new Date().toISOString(),
+          idempotencyKey: crypto.randomUUID(),
+        },
+      },
+    );
+    setBusy(false);
+    setApproving(null);
+    if (!result.ok) {
+      setProblem(
+        result.code === "JOIN_APPLICATION_NOT_REVIEWABLE"
+          ? copy.review.notReviewable
+          : result.message,
+      );
+      // 「通过」可能已经落库（失败只发生在随后的账号发放）：刷新让状态 / 发放两列反映实际。
+      await load();
+      return;
+    }
+    setToast({ text: copy.quickApprove.done, tone: "success" });
+    await load();
   }
 
   return (
@@ -281,7 +317,7 @@ export function JoinApplicationAdminPanel() {
             spec={joinApplicationTableSpec}
             items={items}
             emptyText={joinApplicationEmptyText}
-            renderContext={{ onDetail: setDetailId }}
+            renderContext={{ onDetail: setDetailId, onApprove: setApproving, busy }}
           />
           <AdminListEnd
             pagination={pagination}
@@ -299,6 +335,26 @@ export function JoinApplicationAdminPanel() {
           onClose={() => setDetailId(null)}
           onChanged={() => void load()}
         />
+      ) : null}
+
+      {approving ? (
+        <ConfirmDialog
+          title={copy.quickApprove.title}
+          cancelLabel={adminShared.cancel}
+          confirmLabel={busy ? adminShared.submitting : copy.action.approve}
+          busy={busy}
+          onClose={() => {
+            if (!busy) setApproving(null);
+          }}
+          onConfirm={() => void confirmApprove()}
+        >
+          <p>{copy.quickApprove.hint}</p>
+          <p>
+            <strong>
+              {approving.ticketNo} · {approving.realName}
+            </strong>
+          </p>
+        </ConfirmDialog>
       ) : null}
     </div>
   );
@@ -325,7 +381,7 @@ function ApplicationDetailPanel({
   const [problem, setProblem] = useState("");
   const [toast, setToast] = useState<AdminToastMessage | null>(null);
   const [busy, setBusy] = useState(false);
-  /** 登记面试结果返回的初始密码：只出现一次，必须留在窗口里。 */
+  /** 登记面试结果返回的初始密码：响应里的值只出现一次，留在窗口里展示（规则见下方说明）。 */
   const [secret, setSecret] = useState("");
   const [provision, setProvision] = useState<ProvisionView | null>(null);
   const idempotencyKey = useRef(crypto.randomUUID());
@@ -378,8 +434,16 @@ function ApplicationDetailPanel({
     // 幂等键用掉一次就换新的：否则「先登记通过、再补一条记录」会被判成同一次提交。
     idempotencyKey.current = crypto.randomUUID();
     setSecret(result.data.initializationSecret ?? "");
+    // 已通过的报名再次提交「通过」时服务端不重复发放：带备注只是补记一条面试记录（issue
+    // #97），不带备注是空操作 —— 两种都不能再提示「账号发放任务已创建」。
+    let toastText: string = copy.review.saved;
+    if (data.result === "PASSED" && detail?.status !== "INTERVIEW_PASSED") {
+      toastText = copy.review.passedSaved;
+    } else if (data.result === "PASSED" && data.internalNote?.trim()) {
+      toastText = copy.review.noteAppended;
+    }
     setToast({
-      text: data.result === "PASSED" ? copy.review.passedSaved : copy.review.saved,
+      text: toastText,
       tone: data.result === "PASSED" ? "success" : "neutral",
     });
     await load();

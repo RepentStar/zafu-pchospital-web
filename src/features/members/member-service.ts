@@ -17,8 +17,8 @@ import { appendAuditLog } from "@/lib/audit/audit-service";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
 import { inSerializableTransaction } from "@/lib/db/transaction";
-import { normalizePhone, normalizeQq } from "@/lib/security/normalization";
-import { hashPassword } from "@/lib/security/secrets";
+import { initialPasswordFromQq, normalizePhone, normalizeQq } from "@/lib/security/normalization";
+import { hashGeneratedPassword } from "@/lib/security/secrets";
 import {
   ADMIN_BATCH_LIMIT,
   MEMBER_NICKNAME_MAX_LENGTH,
@@ -81,7 +81,8 @@ export class MemberService implements MemberServiceContract {
       }
       return { member: await this.getView(replay.memberProfileId) };
     }
-    const secret = randomBytes(18).toString("base64url");
+    // 初始密码规则（issue #93）：QQ 后 6 位，5 位老号取整串。
+    const secret = initialPasswordFromQq(normalizeQq(input.qq));
     const member = await inSerializableTransaction(async (tx) => {
       const sourceId = randomUUID();
       const userId = await resolveOrCreateUser(
@@ -405,11 +406,19 @@ export class MemberService implements MemberServiceContract {
 
   async resetPassword(memberId: string, actor: AuthorizedActor): Promise<MemberMutationResult> {
     requirePermission(actor, "member:manage");
-    const secret = randomBytes(18).toString("base64url");
-    const passwordHash = await hashPassword(secret);
+    let secret = "";
     await inSerializableTransaction(async (tx) => {
       const profile = await tx.memberProfile.findUnique({ where: { id: memberId } });
       if (!profile || profile.deletedAt) throw new AppError("RESOURCE_NOT_FOUND", "成员不存在");
+      // 重置口令与发放同一规则（issue #93）：QQ 后 6 位；查不到 QQ 身份时退回随机口令。
+      const qqIdentity = await tx.userIdentity.findFirst({
+        where: { userId: profile.userId, type: "QQ", deletedAt: null },
+        select: { identifierNormalized: true },
+      });
+      secret = qqIdentity
+        ? initialPasswordFromQq(qqIdentity.identifierNormalized)
+        : randomBytes(18).toString("base64url");
+      const passwordHash = await hashGeneratedPassword(secret);
       await tx.passwordCredential.upsert({
         where: { userId: profile.userId },
         create: {

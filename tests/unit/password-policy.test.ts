@@ -10,6 +10,7 @@ import {
   passwordLengthMessage,
 } from "../../src/lib/security/password-policy";
 import { hashPassword, verifyPassword } from "../../src/lib/security/secrets";
+import { initialPasswordFromQq } from "../../src/lib/security/normalization";
 
 /**
  * 密码长度策略的回归测试（第十一轮验收）。
@@ -34,6 +35,15 @@ test("短口令也能落库与校验：hashPassword 不再自带更严的下限"
   assert.match(hash, /^scrypt\$/, "哈希格式必须仍是 scrypt$salt$hash");
   assert.equal(await verifyPassword("123456", hash), true);
   assert.equal(await verifyPassword("123457", hash), false);
+});
+
+test("初始密码 = QQ 号后 6 位；5 位老号取整串（issue #93）", () => {
+  assert.equal(initialPasswordFromQq("123456789"), "456789", "11 位 QQ 取后 6 位");
+  assert.equal(initialPasswordFromQq("1234567"), "234567", "7 位取后 6 位");
+  assert.equal(initialPasswordFromQq("123456"), "123456", "正好 6 位取整串");
+  assert.equal(initialPasswordFromQq("12345"), "12345", "5 位老号取整串");
+  // 与 `normalizeQq` 同一套数字剥离规则；入参若是已规范化的号码，结果不变。
+  assert.equal(initialPasswordFromQq("123 456 789"), "456789");
 });
 
 test("长度策略只有一个来源：源码里不得再出现写死的 12 位密码边界", () => {

@@ -35,6 +35,8 @@
   禁用 User、撤销 MemberProfile 或 UserRole 后实时拒绝。
 - `login_throttles` 以 QQ + IP 的不可逆摘要持久化失败窗口，不保存原始 QQ 或 IP，可供多实例共享。
 - 管理员发放的初始密码设置 `must_change_password=true`；邀请码注册的自设密码为 `false`。
+  初始密码由成员 QQ 号推导：取后 6 位（QQ 不足 6 位时取整串，见 `initialPasswordFromQq`），
+  提交给本人后首次登录即要求改密；管理员重置密码沿用同一规则。
 - 改密和管理员重置密码必须撤销已有 Session；改密成功轮换当前 Session。
 
 ## 招募与发放边界

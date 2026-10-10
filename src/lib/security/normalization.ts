@@ -28,6 +28,18 @@ export function normalizePhone(value: string): string {
   return normalized;
 }
 
+/**
+ * 账号发放的初始密码规则（issue #93）：**QQ 号后 6 位**，不足 6 位的老号取整串（5 位）。
+ *
+ * 规则公开、可由 QQ 号推算 —— 这是刻意换来的「管理员不用转达随机口令」，
+ * 安全上的补偿是首次登录强制改密（`setInitialPassword` 写 `mustChangePassword: true`）
+ * 与登录节流（同 QQ + IP 15 分钟失败 5 次锁定）。
+ */
+export function initialPasswordFromQq(qq: string): string {
+  const normalized = qq.replace(/\D/g, "");
+  return normalized.length > 6 ? normalized.slice(-6) : normalized;
+}
+
 export function normalizeInviteCode(value: string): string {
   const normalized = value.trim().replace(/[\s-]/g, "").toUpperCase();
   if (!/^[A-Z0-9]{16,64}$/.test(normalized)) {

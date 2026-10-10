@@ -44,6 +44,20 @@ export async function hashPassword(password: string): Promise<string> {
   if (!isPasswordLengthValid(password)) {
     throw new Error(passwordLengthMessage());
   }
+  return hashPasswordCore(password);
+}
+
+/**
+ * 口令由**系统按规则生成**（初始密码 = QQ 后 6 位，5 位老号就是 5 位，issue #93）时用这个：
+ * 它不套用表单的长度策略 —— 那条规则管的是「用户自己设置口令」，而 5 位的老 QQ 号
+ * 生成出来只有 5 位，套上去会直接抛错、账号发不出去。登录只校验密码本身，
+ * 首次登录强制改密后用户自己设的口令仍受策略约束。
+ */
+export async function hashGeneratedPassword(password: string): Promise<string> {
+  return hashPasswordCore(password);
+}
+
+async function hashPasswordCore(password: string): Promise<string> {
   const salt = randomBytes(16);
   const derived = (await scrypt(password, salt, 64)) as Buffer;
   return `scrypt$${salt.toString("base64url")}$${derived.toString("base64url")}`;

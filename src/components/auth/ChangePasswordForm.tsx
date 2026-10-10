@@ -48,7 +48,9 @@ export function ChangePasswordForm() {
             name={name}
             type="password"
             autoComplete={autoComplete}
-            minLength={PASSWORD_MIN_LENGTH}
+            // 「当前密码」不设下限：它是**校验**的对象，不是正在设置的密码（同登录表单）。
+            // 5 位老 QQ（issue #93）的初始密码只有 5 位，带 minLength 会让他在这一步被拦死。
+            minLength={name === "currentPassword" ? undefined : PASSWORD_MIN_LENGTH}
             maxLength={PASSWORD_MAX_LENGTH}
             required
           />

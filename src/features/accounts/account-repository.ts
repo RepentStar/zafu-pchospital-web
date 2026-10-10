@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { AppError } from "@/lib/api/errors";
-import { hashPassword } from "@/lib/security/secrets";
+import { hashGeneratedPassword, hashPassword } from "@/lib/security/secrets";
 import type { ProvisionSourceType } from "@/types/contracts";
 
 type IdentityInput = { qq: string; phone: string };
@@ -149,7 +149,9 @@ export async function setInitialPassword(
   const existing = await tx.passwordCredential.findUnique({ where: { userId } });
   if (existing) return false;
   const now = new Date();
-  const passwordHash = await hashPassword(plainPassword);
+  // 初始口令由发放规则生成（QQ 后 6 位，见 `initialPasswordFromQq`），走 hashGeneratedPassword：
+  // 5 位老 QQ 号生成的口令只有 5 位，套表单策略会抛错、账号发不出去。
+  const passwordHash = await hashGeneratedPassword(plainPassword);
   await tx.passwordCredential.create({
     data: {
       userId,

@@ -71,7 +71,7 @@ function application(
   };
 }
 
-async function render(items: JoinApplicationSummary[]): Promise<string> {
+async function render(items: JoinApplicationSummary[], busy = false): Promise<string> {
   const { AdminTable, spec, emptyText } = await load();
   return renderToStaticMarkup(
     // 泛型要显式给：`createElement` 推不出 spec 与 items 的类型。
@@ -79,7 +79,7 @@ async function render(items: JoinApplicationSummary[]): Promise<string> {
       spec,
       items,
       emptyText,
-      renderContext: { onDetail: noop },
+      renderContext: { onDetail: noop, onApprove: noop, busy },
       rowProps: (item: JoinApplicationSummary) => ({ "data-row-id": item.id }),
     }),
   );
@@ -151,8 +151,41 @@ test("常规行：data-label、脱敏联系方式、提交时间逐项对齐", a
   assert.match(submitted, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
   // 账号发放按既有文案显示。
   assert.ok(html.includes(admin.provisionStatusLabels.NOT_REQUIRED));
-  // 唯一的动作是「详情」。
+  // 两个行内动作：「详情」始终可点；「通过」（issue #95）对可审核状态可点。
   assert.ok(html.includes(copy.action.detail));
+  assert.ok(html.includes(copy.action.approve));
+  assert.match(
+    html,
+    new RegExp(`<button(?![^>]*disabled)[^>]*><span>${copy.action.approve}</span></button>`),
+    "可审核状态（SUBMITTED）的「通过」不应置灰",
+  );
+});
+
+test("「通过」按钮常驻：不可审核状态置灰、提交中（busy）整体置灰", async () => {
+  const { admin } = await load();
+  const copy = admin.adminCopy.recruitment;
+  const disabledApprove = `<button[^>]*disabled[^>]*><span>${copy.action.approve}</span></button>`;
+
+  // 已通过 / 未通过 / 已撤回：按钮仍在（宽度不跳），但置灰。
+  const decided = await render([
+    application("P", "INTERVIEW_PASSED"),
+    application("R", "INTERVIEW_REJECTED"),
+    application("W", "WITHDRAWN"),
+  ]);
+  assert.equal(
+    decided.split(new RegExp(disabledApprove)).length - 1,
+    3,
+    "三个不可审核状态都应有置灰的「通过」按钮",
+  );
+  assert.equal(
+    decided.includes(`<span>${copy.action.approve}</span>`),
+    true,
+    "按钮本身应常驻",
+  );
+
+  // 有请求在途：可审核状态也置灰，防连点。
+  const busyHtml = await render([application("S", "SUBMITTED")], true);
+  assert.match(busyHtml, new RegExp(disabledApprove), "busy 时「通过」应置灰");
 });
 
 test("状态标签三档：已通过 / 未通过与撤回（中性灰）/ 其余（待处理）", async () => {
