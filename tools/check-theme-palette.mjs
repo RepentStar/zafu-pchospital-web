@@ -5,7 +5,7 @@
  * 无法直接引用官网的变量）。两份必须逐值一致，否则同一个站点会出现两种观感。
  * 靠人记着「改一边要改另一边」迟早会漂，所以放在 pnpm lint 里强制校验。
  *
- * 另外校验主题存储键在 src/lib/theme.ts 与 tools/build-docs.mjs 里一致 ——
+ * 另外校验主题存储键在 src/lib/theme.ts 与 tools/handbook.mjs 里一致 ——
  * 文档站靠读这个 localStorage 键来跟随官网的显示模式。
  *
  * 用法：node tools/check-theme-palette.mjs
@@ -19,9 +19,12 @@ import { resolveDocsSourceRoot } from "./docs-source.mjs";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const globalsCssPath = path.join(projectRoot, "src", "app", "globals.css");
 const sourceRoot = resolveDocsSourceRoot(projectRoot);
-const mdbookCssPath = path.join(sourceRoot, "theme", "pc-hospital.css");
+// 同步时同时校验即将发布的哈希 CSS；默认仍读取源码。
+const mdbookCssPath = process.env.DOCS_THEME_CSS
+  ? path.resolve(process.env.DOCS_THEME_CSS)
+  : path.join(sourceRoot, "theme", "pc-hospital.css");
 const themeTsPath = path.join(projectRoot, "src", "lib", "theme.ts");
-const buildDocsPath = path.join(projectRoot, "tools", "build-docs.mjs");
+const buildDocsPath = path.join(projectRoot, "tools", "handbook.mjs");
 
 if (!existsSync(mdbookCssPath)) {
   console.error(
@@ -148,9 +151,7 @@ for (const [key, resource] of [
   ["additional-css", "theme/pc-hospital.css"],
   ["additional-js", "theme/pc-hospital.js"],
 ]) {
-  const resources = bookConfig.match(
-    new RegExp(`^\\s*${key}\\s*=\\s*\\[([^\\]]*)\\]`, "m"),
-  )?.[1];
+  const resources = bookConfig.match(new RegExp(`^\\s*${key}\\s*=\\s*\\[([^\\]]*)\\]`, "m"))?.[1];
   if (!resources?.includes(`"${resource}"`) && !resources?.includes(`'${resource}'`)) {
     problems.push(`文档 book.toml 的 ${key} 缺少 "${resource}"。`);
   }
@@ -182,13 +183,15 @@ for (const [label, siteTokens, docsTokens] of [
 }
 
 /* 主题存储键：文档站靠它跟随官网的模式 */
-const keyMatch = readFileSync(themeTsPath, "utf8").match(/THEME_STORAGE_KEY\s*=\s*["']([^"']+)["']/);
+const keyMatch = readFileSync(themeTsPath, "utf8").match(
+  /THEME_STORAGE_KEY\s*=\s*["']([^"']+)["']/,
+);
 if (!keyMatch) {
   problems.push("无法从 src/lib/theme.ts 读到 THEME_STORAGE_KEY");
 } else if (!readFileSync(buildDocsPath, "utf8").includes(`"${keyMatch[1]}"`)) {
   problems.push(
     `主题存储键不同步：src/lib/theme.ts 用 "${keyMatch[1]}"，` +
-      "但 tools/build-docs.mjs 的主题引导脚本里找不到同一个字符串。",
+      "但 tools/handbook.mjs 的主题引导脚本里找不到同一个字符串。",
   );
 }
 

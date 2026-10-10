@@ -5,7 +5,6 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -15,6 +14,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { resolveDocsSourceRoot } from "./docs-source.mjs";
+import { customizeHandbook, validateHandbook } from "./handbook.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = resolveDocsSourceRoot(projectRoot);
@@ -225,66 +225,6 @@ function parseSummary() {
   return { tree, pages };
 }
 
-function walkFiles(directory) {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const entryPath = path.join(directory, entry.name);
-    return entry.isDirectory() ? walkFiles(entryPath) : [entryPath];
-  });
-}
-
-function customizeHtml() {
-  const marker = 'data-pc-hospital-return="true"';
-  const link =
-    `<a href="/docs" class="pc-hospital-return" title="返回电脑医院官网" ${marker}>` +
-    `<span aria-hidden="true">←</span><span>电脑医院官网</span></a>`;
-  const themeBootstrapMarker = 'data-pc-hospital-theme-bootstrap="true"';
-  const siteFont =
-    '<style data-pc-hospital-font="true">@font-face{font-family:Archivo;src:url("/fonts/archivo-latin-wdth.woff2") format("woff2-variations");font-weight:100 900;font-stretch:62% 125%;font-style:normal;font-display:swap}</style>';
-  /* 主题引导：解析顺序必须与官网 src/lib/theme.ts 完全一致 ——
-       本地存过明确模式 → 用它；否则跟随 prefers-color-scheme；再否则回落到正常模式。
-     漏掉「跟随系统」那条会出现：首次访客系统是深色 → 官网深色、文档站却是浅色。
-     存储键与官网共用（同域 localStorage）；tools/check-theme-palette.mjs
-     会校验这个键在 build-docs.mjs 与 src/lib/theme.ts 里一致。 */
-  const themeBootstrap = `<script ${themeBootstrapMarker}>(function(){try{var k="zafu-pchospital:theme-mode",m=localStorage.getItem(k);if(m!=="dark"&&m!=="normal"){m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"normal"}localStorage.setItem("mdbook-theme",m==="dark"?"coal":"light")}catch(e){}})();</script>`;
-  let injected = 0;
-
-  for (const htmlPath of walkFiles(outputRoot).filter((file) => file.endsWith(".html"))) {
-    let html = readFileSync(htmlPath, "utf8");
-    if (!html.includes(themeBootstrapMarker) && html.includes("<!-- Custom HTML head -->")) {
-      html = html.replace(
-        "<!-- Custom HTML head -->",
-        `<!-- Custom HTML head -->${themeBootstrap}${siteFont}`,
-      );
-    }
-    if (!html.includes(marker) && html.includes('<div class="left-buttons">')) {
-      html = html.replace('<div class="left-buttons">', `<div class="left-buttons">${link}`);
-      injected += 1;
-    }
-    writeFileSync(htmlPath, html);
-  }
-
-  const indexHtml = readFileSync(path.join(outputRoot, "index.html"), "utf8");
-  if (!injected || !indexHtml.includes(marker) || !indexHtml.includes(themeBootstrapMarker)) {
-    fail("无法向 mdBook 加入官网导航或主题引导，请检查当前 mdBook 主题结构");
-  }
-}
-
-function validateAssets() {
-  const files = walkFiles(outputRoot);
-  if (!existsSync(path.join(outputRoot, "index.html"))) fail("缺少 public/handbook/index.html");
-  if (!files.some((file) => file.endsWith(".js"))) fail("mdBook 产物中没有 JavaScript 资源");
-  if (!files.some((file) => file.endsWith(".css"))) fail("mdBook 产物中没有 CSS 资源");
-  if (!files.some((file) => /^searchindex(?:[.-])/.test(path.basename(file)))) {
-    fail("mdBook 已启用搜索，但产物中没有 searchindex.*");
-  }
-  if (!files.some((file) => /^pc-hospital(?:[.-]).*\.css$/.test(path.basename(file)))) {
-    fail("mdBook 产物中没有电脑医院自定义主题 CSS");
-  }
-  if (!files.some((file) => /^pc-hospital(?:[.-]).*\.js$/.test(path.basename(file)))) {
-    fail("mdBook 产物中没有电脑医院自定义主题 JavaScript");
-  }
-}
-
 function resolveRevision() {
   if (process.env.DOCS_SHA) return process.env.DOCS_SHA;
   try {
@@ -359,24 +299,20 @@ rmSync(outputRoot, { recursive: true, force: true });
 mkdirSync(outputRoot, { recursive: true });
 
 console.log(`[docs:build] source: ${sourceRoot}`);
-execFileSync(
-  mdbookBin,
-  ["build", buildSourceRoot, "--dest-dir", outputRoot],
-  {
-    cwd: projectRoot,
-    env: {
-      ...process.env,
-      MDBOOK_OUTPUT__HTML__SITE_URL: '"/handbook/"',
-    },
-    stdio: "inherit",
+execFileSync(mdbookBin, ["build", buildSourceRoot, "--dest-dir", outputRoot], {
+  cwd: projectRoot,
+  env: {
+    ...process.env,
+    MDBOOK_OUTPUT__HTML__SITE_URL: '"/handbook/"',
   },
-);
+  stdio: "inherit",
+});
 
 const cnamePath = path.join(outputRoot, "CNAME");
 if (existsSync(cnamePath) && statSync(cnamePath).isFile()) rmSync(cnamePath);
 
-validateAssets();
-customizeHtml();
+validateHandbook(outputRoot);
+customizeHandbook(outputRoot);
 
 const { tree, pages } = parseSummary();
 const counts = countEntries(tree);
