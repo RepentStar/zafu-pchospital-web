@@ -32,7 +32,7 @@ export function Hero({ analytics }: { analytics?: PublicHomeAnalytics } = {}) {
       <Container className={cn("hero__inner", hasAnalytics && "hero__inner--public")}>
         <div className="hero__identity">
           <p className="hero__tag">
-            <i aria-hidden="true" />
+            <span className="hero__logo" role="img" aria-label={heroContent.logoAlt} />
             {heroContent.tag}
           </p>
 
