@@ -1,6 +1,6 @@
 import { repairActivitiesPage } from "@/config/repair-activities";
 
-/** 页面常驻提醒、报名前确认与报名成功提醒共用同一份须知。 */
+/** 页面展开区与报名前确认共用同一份完整须知。 */
 export function RepairActivityPrecautions() {
   return (
     <ol className="admin-plain-list">

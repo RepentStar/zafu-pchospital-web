@@ -47,6 +47,14 @@ const activity: RepairActivityPublicView = {
 
 /** 与既有客户端测试相同的 hook 存储方式；只驱动真实 JSX/effect，不启动 Next 或 DB。 */
 async function mount(t: TestContext) {
+  const originalCss = require.extensions[".css"];
+  require.extensions[".css"] = (module) => {
+    module.exports = {};
+  };
+  t.after(() => {
+    if (originalCss) require.extensions[".css"] = originalCss;
+    else delete require.extensions[".css"];
+  });
   t.mock.timers.enable({ apis: ["Date", "setInterval"], now: new Date("2026-10-24T04:00:01Z") });
   (globalThis as unknown as { React: typeof React }).React = React;
   const originals = ["window", "document"].map(
@@ -228,7 +236,7 @@ test("切换活动会使旧请求失效，旧活动响应不能覆盖新目标",
   assert.equal(text(node).includes("旧目标"), false);
 });
 
-test("活动页常驻须知与确认弹窗共用文案，报名成功后再次提醒且不重复提交", async (t) => {
+test("完整须知可展开且提交前必须同意，成功只展示到场准备并且不重复提交", async (t) => {
   const ui = await mount(t);
   await ui.finish(0, { ...activity, status: "OPEN" });
   const panel = findElement(
@@ -238,7 +246,13 @@ test("活动页常驻须知与确认弹窗共用文案，报名成功后再次�
   assert.ok(panel);
   const { RepairActivityPrecautions } =
     await import("../../src/components/repair-activities/RepairActivityPrecautions");
-  assert.ok(findElement(panel, (element) => element.type === RepairActivityPrecautions));
+  const { RepairActivityPreparation } =
+    await import("../../src/components/repair-activities/RepairActivityPreparation");
+  assert.ok(findElement(panel, (element) => element.type === RepairActivityPreparation));
+  const fullNotice = findElement(panel, (element) => element.type === "details");
+  assert.ok(fullNotice);
+  assert.equal(fullNotice.props.open, undefined, "默认折叠完整须知");
+  assert.ok(findElement(fullNotice, (element) => element.type === RepairActivityPrecautions));
   assert.equal(
     text(RepairActivityPrecautions()),
     repairActivitiesPage.detail.consent.clauses.join(""),
@@ -247,6 +261,7 @@ test("活动页常驻须知与确认弹窗共用文案，报名成功后再次�
   const consent = ui.requestSignup();
   assert.equal(ui.requests.length, 1, "未同意须知时不发送报名请求");
   assert.equal(consent.props.title, repairActivitiesPage.detail.consent.title);
+  assert.equal(consent.props.confirmLabel, repairActivitiesPage.detail.consent.agree);
   assert.ok(findElement(consent, (element) => element.type === RepairActivityPrecautions));
   (consent.props.onConfirm as () => void)();
   assert.equal(signupDialog(ui.view())?.props.busy, true);
@@ -263,7 +278,14 @@ test("活动页常驻须知与确认弹窗共用文案，报名成功后再次�
   assert.equal(success?.props.title, repairActivitiesPage.detail.signupSuccessTitle);
   assert.equal(success?.props.cancelLabel, undefined);
   assert.equal(ui.formResets(), 1, "成功后清空报名表单");
-  assert.ok(findElement(success, (element) => element.type === RepairActivityPrecautions));
+  assert.equal(
+    findElement(success, (element) => element.type === RepairActivityPrecautions),
+    undefined,
+  );
+  assert.ok(findElement(success, (element) => element.type === RepairActivityPreparation));
+  for (const item of repairActivitiesPage.detail.preparation) {
+    assert.ok(text(RepairActivityPreparation()).includes(item.title));
+  }
 
   await ui.finish(2, null); // 成功后的刷新失败不能覆盖成功提醒。
   success = signupDialog(ui.view());
