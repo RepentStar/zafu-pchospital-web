@@ -8,6 +8,7 @@ import {
 } from "@/components/repair-activities/activity-format";
 import { AdminToast, type AdminToastMessage } from "@/components/admin/AdminToast";
 import { repairActivityStatusBadgeClass } from "@/components/repair-activities/activity-status-badge";
+import { RepairActivityPrecautions } from "@/components/repair-activities/RepairActivityPrecautions";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -37,9 +38,10 @@ export function RepairActivityDetail({ activityId }: Props) {
   const [problem, setProblem] = useState("");
   const [notice, setNotice] = useState<AdminToastMessage | null>(null);
   const [busy, setBusy] = useState(false);
+  const [signupSucceeded, setSignupSucceeded] = useState(false);
   const [lookup, setLookup] = useState<RegistrationLookupView | null>(null);
   const [lookupPhone, setLookupPhone] = useState("");
-  /** 已填好、等报名者在免责声明弹层里点「我已阅读并同意」的那一份表单内容。 */
+  /** 待确认的表单内容；成功后保留弹层，关闭注意事项提醒时一并清除。 */
   const [pendingSignup, setPendingSignup] = useState<{
     name: string;
     phone: string;
@@ -203,10 +205,11 @@ export function RepairActivityDetail({ activityId }: Props) {
         setPendingSignup(null);
         setProblem(json.error?.message ?? "报名失败");
       } else {
-        setPendingSignup(null);
-        setNotice({ text: copy.signupSuccess, tone: "success" });
+        setSignupSucceeded(true);
+        setBusy(false);
         signupFormRef.current?.reset();
-        await load();
+        // 报名已成功：刷新失败时保留当前页面与成功提醒。
+        await load(true);
       }
     } catch {
       setPendingSignup(null);
@@ -214,6 +217,13 @@ export function RepairActivityDetail({ activityId }: Props) {
     } finally {
       setBusy(false);
     }
+  }
+
+  function closeSignupDialog() {
+    // 名额用完后提交按钮会禁用，以表单作为可用的焦点归还位置。
+    signupFormRef.current?.focus({ preventScroll: true });
+    setPendingSignup(null);
+    setSignupSucceeded(false);
   }
 
   async function doLookup(event: FormEvent<HTMLFormElement>) {
@@ -363,6 +373,15 @@ export function RepairActivityDetail({ activityId }: Props) {
         </dl>
       </Card>
 
+      <section aria-labelledby="repair-activity-precautions-title">
+        <Card variant="notice" className="repair-panel">
+          <h2 className="admin-panel__title" id="repair-activity-precautions-title">
+            {copy.precautionsTitle}
+          </h2>
+          <RepairActivityPrecautions />
+        </Card>
+      </section>
+
       <AdminToast toast={notice} onDismiss={() => setNotice(null)} />
       {problem ? (
         <p className="admin-status admin-status--error" role="alert">
@@ -434,6 +453,7 @@ export function RepairActivityDetail({ activityId }: Props) {
           <form
             className="admin-form"
             ref={signupFormRef}
+            tabIndex={-1}
             onSubmit={requestSignup}
             aria-label={copy.signupTitle}
           >
@@ -557,24 +577,20 @@ export function RepairActivityDetail({ activityId }: Props) {
         </Card>
       </div>
 
-      {/* 免责声明（issue #62 前端3）：点「提交报名」先弹这里，不同意就提交不了。
-          服务端同样强制，绕开这个弹层直接打接口会拿到 400。 */}
+      {/* 提交前确认同意，成功后在同一弹层再次提醒（issue #208）。
+          服务端同样强制同意，绕开确认直接打接口会拿到 400。 */}
       {pendingSignup ? (
         <ConfirmDialog
-          title={copy.consent.title}
-          confirmLabel={copy.consent.agree}
-          cancelLabel={copy.consent.cancel}
-          busy={busy}
-          onConfirm={() => void confirmSignup()}
-          onClose={() => setPendingSignup(null)}
+          title={signupSucceeded ? copy.signupSuccessTitle : copy.consent.title}
+          confirmLabel={signupSucceeded ? copy.acknowledgePrecautions : copy.consent.agree}
+          cancelLabel={signupSucceeded ? undefined : copy.consent.cancel}
+          busy={!signupSucceeded && busy}
+          onConfirm={signupSucceeded ? closeSignupDialog : () => void confirmSignup()}
+          onClose={closeSignupDialog}
         >
           <div className="admin-section">
-            <p className="muted">{copy.consent.subtitle}</p>
-            <ol className="admin-plain-list">
-              {copy.consent.clauses.map((clause) => (
-                <li key={clause}>{clause}</li>
-              ))}
-            </ol>
+            <p className="muted">{signupSucceeded ? copy.signupSuccess : copy.consent.subtitle}</p>
+            <RepairActivityPrecautions />
           </div>
         </ConfirmDialog>
       ) : null}

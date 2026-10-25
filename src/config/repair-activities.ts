@@ -4,7 +4,7 @@
  * 改动 `detail.consent.clauses` 之后**必须**同时改这个值：报名记录里存的是当时那一版，
  * 用于日后核对「这位同学同意的是哪一版文本」。格式为日期，便于排序与人工核对。
  */
-export const repairActivityConsentVersion = "2026-10-10";
+export const repairActivityConsentVersion = "2026-10-25";
 
 /**
  * 公开维修活动页文案（M1）。
@@ -38,6 +38,9 @@ export const repairActivitiesPage = {
     submitLookup: "查询报名",
     submitUpdate: "保存故障类型",
     signupSuccess: "报名成功。请按时到场，并保管好手机号以便查询。",
+    precautionsTitle: "注意事项",
+    signupSuccessTitle: "报名成功，请再次确认注意事项",
+    acknowledgePrecautions: "我已知晓",
     lookupSuccess: "已找到报名记录，可修改故障类型。",
     updateSuccess: "故障类型已更新。",
     signupDisabled: "当前不可报名",
@@ -64,6 +67,8 @@ export const repairActivitiesPage = {
         "配件与耗材按现场情况与客户协商解决，社团不承诺提供配件。",
         "如需清灰、更换硅脂等使用耗材的服务，请自备硅脂（导热膏）等耗材；未自备将无法完成该类服务。",
         "送修时请携带电源适配器；部分故障需通电才能现场检查。",
+        "部分 Dell 游戏本机型因主板倒装设计，换硅脂需要拆卸整块主板，对比其他机型所需时间较长，难度稍大，风险较高，由于不同场次活动的参加成员不同，我们可能不进行接待，请先 QQ 群内联系管理员确认。",
+        "如果想要取消报名请联系 QQ 群内管理员，把名额留给需要的人。",
         "报名信息只用于本场活动的组织与到场核对，不对外公开。",
       ],
       agree: "我已阅读并同意",

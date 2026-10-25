@@ -817,7 +817,9 @@ round 端点）。后台需要新图标时按同样规则补 `Icon.tsx` 的 `sha
 - 活动详情里的报名表单复用 `.signup` / `.field`（同一套表单控件），不另造第二套。
 - 公开活动列表与详情复用 `.repair-page` 收紧页头与正文留白、`.repair-panel` 提供面板内边距；
   列表 <760px 单列、760–1099px 两列、≥1100px 四列，详情表单 ≥1100px 双栏；
-  长标题和元信息可断行，成功反馈复用 `AdminToast`，不挤动表单。
+  长标题和元信息可断行；活动信息下方常驻注意事项栏，复用 `Card variant="notice"`。
+  报名前确认与报名成功提醒复用 `ConfirmDialog`，三处共用同一份须知文案；成功提醒仅需知晓，
+  从正文开头阅读，关闭后归还焦点，名额已满时以报名表单作为焦点后备。查询 / 修改反馈继续复用 `AdminToast`。
 - 成员活动列表使用 `.member-activity-workspace` 收紧页头留白，与成员维修列表共用内容宽度；
   活动卡复用 `.repair-panel` 内边距，悬停与键盘焦点描边画在边界内侧，避免被横滑容器裁切。
 - 活动工作台复用 `.member-activity-workspace` 页头和 `.repair-panel` 面板内边距；
