@@ -206,10 +206,10 @@ export function RepairActivityDetail({ activityId }: Props) {
         setProblem(json.error?.message ?? "报名失败");
       } else {
         setSignupSucceeded(true);
-        setBusy(false);
         signupFormRef.current?.reset();
+        // 刷新独立收尾，不延长 POST 的忙碌周期，也不解除下一次操作的禁用。
         // 报名已成功：刷新失败时保留当前页面与成功提醒。
-        await load(true);
+        void load(true);
       }
     } catch {
       setPendingSignup(null);

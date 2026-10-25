@@ -288,3 +288,30 @@ test("报名失败只显示错误，保留输入以便重试，不显示成功�
   assert.equal(ui.requests.length, 2, "失败时不刷新活动或再次提交");
   assert.equal(ui.requestSignup().props.title, repairActivitiesPage.detail.consent.title);
 });
+
+test("上次报名的慢刷新结束时，不解除下一次报名的在途禁用", async (t) => {
+  const ui = await mount(t);
+  await ui.finish(0, { ...activity, status: "OPEN" });
+  (ui.requestSignup().props.onConfirm as () => void)();
+  ui.requests[1].finish(Response.json({ success: true }));
+  await setImmediate();
+  assert.equal(ui.requests[2].init.method, undefined, "首次报名成功后刷新活动");
+  (signupDialog(ui.view())?.props.onConfirm as () => void)();
+
+  (ui.requestSignup().props.onConfirm as () => void)();
+  assert.equal(ui.requests[3].init.method, "POST");
+  assert.equal(signupDialog(ui.view())?.props.busy, true);
+  await ui.finish(2, { ...activity, status: "OPEN", registeredCount: 3, remaining: 7 });
+  assert.equal(signupDialog(ui.view())?.props.busy, true, "旧 GET 不能解锁仍在提交的新报名");
+  const name = findElement(ui.view(), (element) => element.props.name === "name");
+  assert.equal(name?.props.disabled, true);
+
+  ui.requests[3].finish(Response.json({ success: true }));
+  await setImmediate();
+  assert.equal(
+    signupDialog(ui.view())?.props.title,
+    repairActivitiesPage.detail.signupSuccessTitle,
+  );
+  assert.equal(signupDialog(ui.view())?.props.busy, false);
+  await ui.finish(4, null);
+});
