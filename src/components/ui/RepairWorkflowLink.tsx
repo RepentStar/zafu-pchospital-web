@@ -7,7 +7,7 @@ export function RepairWorkflowLink() {
       href={repairWorkflowLink.href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-ink-4 decoration-accent-line hover:text-accent-deep focus-visible:text-accent-deep inline-flex items-center gap-1 text-xs font-bold underline underline-offset-[0.22em] hover:decoration-current focus-visible:decoration-current"
+      className="text-ink-4 decoration-accent-line hover:text-accent-deep focus-visible:text-accent-deep inline-flex items-center gap-1 font-bold underline underline-offset-[0.22em] hover:decoration-current focus-visible:decoration-current"
     >
       {repairWorkflowLink.label}
       <Icon name="arrowUpRight" className="size-3" />
