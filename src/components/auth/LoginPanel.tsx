@@ -35,7 +35,7 @@ export function LoginPanel({ mode = "login", returnTo }: LoginPanelProps) {
       eyebrow={shell.eyebrow}
       className={isRegister ? "auth-login__panel--register" : undefined}
     >
-      <BrowserHint loginPath={isRegister ? registerHref : loginHref} />
+      <BrowserHint />
       {isRegister ? (
         <InviteRegistrationForm returnTo={returnTo} />
       ) : (

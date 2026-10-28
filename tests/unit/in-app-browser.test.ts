@@ -39,6 +39,20 @@ test("常见独立浏览器、未知和空 UA 不显示提醒", () => {
   }
 });
 
+test("桌面 QQ / 微信不触发手机浏览器提醒，Mobile 标记不改变设备判定", () => {
+  const desktops = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36",
+  ];
+  for (const desktop of desktops) {
+    for (const marker of ["QQ/9.9.16", "MicroMessenger/4.0.0", "Mobile MicroMessenger/4.0.0"])
+      assert.equal(detectInAppBrowser(`${desktop} ${marker}`), null);
+  }
+  for (const ua of ["QQ/9.0.0", "MicroMessenger/8.0.40", "Mobile MicroMessenger/8.0.40"])
+    assert.equal(detectInAppBrowser(ua), null);
+});
+
 test("标记大小写、边界和版本号：不把相似名称或任意子串当成 QQ", () => {
   assert.equal(detectInAppBrowser(`${android} qq/9.0.0`), "qq");
   assert.equal(detectInAppBrowser(`${ios} micromessenger/8.0.40`), "wechat");

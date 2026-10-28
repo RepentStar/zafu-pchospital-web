@@ -20,7 +20,7 @@ export function MemberShell({ children, displayName = null }: MemberShellProps) 
     <div className="member-shell">
       <MemberNav displayName={displayName} />
       <div className="member-shell__main">
-        <BrowserHint className="mx-4 mt-4 lg:mx-6" />
+        <BrowserHint />
         {children}
       </div>
     </div>

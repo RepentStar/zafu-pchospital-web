@@ -8,39 +8,31 @@ import { browserHintCopy, browserHintDismissedKey } from "../../src/config/brows
 
 const require = createRequire(import.meta.url);
 const React = require("react") as typeof import("react");
+const ReactDOM = require("react-dom") as typeof import("react-dom");
 
-async function mount(
-  t: TestContext,
-  options: { blockedStorage?: boolean; loginPath?: string } = {},
-) {
+async function mount(t: TestContext, options: { blockedStorage?: boolean } = {}) {
   (globalThis as unknown as { React: typeof React }).React = React;
   const storage = new Map<string, string>();
-  let rejectCopy = false;
-  const copied: string[] = [];
-  const originals = ["window", "navigator", "sessionStorage"].map(
+  const originals = ["navigator", "sessionStorage", "document"].map(
     (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
   );
-  Object.defineProperty(globalThis, "window", {
+  const handlers = new Map<string, (event: { key: string }) => void>();
+  Object.defineProperty(globalThis, "document", {
     configurable: true,
     value: {
-      location: {
-        origin: "https://pczafu.cn",
-        pathname: "/member/repair-activities/a",
-        search: "?token=must-not-copy&phone=must-not-copy",
-        hash: "#must-not-copy",
-      },
+      body: {},
+      addEventListener: (name: string, handler: (event: { key: string }) => void) =>
+        handlers.set(name, handler),
+      removeEventListener: (name: string) => handlers.delete(name),
     },
   });
+  t.mock.method(ReactDOM, "createPortal", (children: ReactNode) => children);
+  t.mock.method(React, "useRef", () => ({ current: null }));
+  t.mock.method(React, "useCallback", (callback: unknown) => callback);
   Object.defineProperty(globalThis, "navigator", {
     configurable: true,
     value: {
-      userAgent: "Mozilla/5.0 QQ/9.0.0",
-      clipboard: {
-        async writeText(url: string) {
-          if (rejectCopy) throw new Error("denied");
-          copied.push(url);
-        },
-      },
+      userAgent: "Mozilla/5.0 (Linux; Android 14) Mobile QQ/9.0.0",
     },
   });
   Object.defineProperty(globalThis, "sessionStorage", {
@@ -59,37 +51,39 @@ async function mount(
 
   let slots: unknown[] = [];
   let cursor = 0;
-  let effect: (() => void) | undefined;
-  let initialized = false;
+  let effects: (() => void)[] = [];
   t.mock.method(React, "useState", (initial: unknown) => {
     const index = cursor++;
     if (!(index in slots)) slots[index] = initial;
     return [slots[index], (value: unknown) => (slots[index] = value)];
   });
   t.mock.method(React, "useEffect", (callback: () => void) => {
-    if (!initialized) effect = callback;
+    effects.push(callback);
   });
   const { BrowserHint } = await import("../../src/components/ui/BrowserHint");
   const view = () => {
     cursor = 0;
-    return BrowserHint({ loginPath: options.loginPath });
+    effects = [];
+    return BrowserHint() as unknown as React.ReactElement<{ children: ReactNode }> | null;
   };
   const hydrate = () => {
     const first = view();
     assert.equal(first, null, "首帧保持与 SSR 一致");
-    initialized = true;
-    effect?.();
-    return view();
+    effects[0]();
+    const rendered = view();
+    effects[1]();
+    return rendered;
   };
-  const html = () => renderToStaticMarkup(view());
-  const buttons = () => {
+  const notice = () => {
     const node = view();
     assert.ok(node);
-    const children = React.Children.toArray(node.props.children);
-    const actions = children[1] as React.ReactElement<{ children: ReactNode }>;
-    return React.Children.toArray(actions.props.children) as React.ReactElement<{
-      onClick: () => void;
-    }>[];
+    return node;
+  };
+  const html = () => renderToStaticMarkup(notice());
+  const close = () => {
+    const body = notice().props.children as React.ReactElement<{ children: ReactNode }>;
+    const controls = React.Children.toArray(body.props.children);
+    (controls.at(-1) as React.ReactElement<{ onClick: () => void }>).props.onClick();
   };
   t.after(() => {
     for (const [key, original] of originals) {
@@ -102,62 +96,68 @@ async function mount(
     html,
     view,
     storage,
-    copied,
-    async copy(fail = false) {
-      rejectCopy = fail;
-      buttons()[0].props.onClick();
-      await new Promise((resolve) => setImmediate(resolve));
-    },
-    close() {
-      buttons()[1].props.onClick();
+    close,
+    escape() {
+      handlers.get("keydown")?.({ key: "Escape" });
     },
     remount() {
       slots = [];
-      initialized = false;
+      handlers.clear();
       return hydrate();
     },
   };
 }
 
-test("复制成员 pathname、失败时手动复制，关闭状态跨挂载保留", async (t) => {
+test("内置浏览器显示可关闭的提示浮条，关闭状态跨挂载保留", async (t) => {
   const hint = await mount(t);
   hint.hydrate();
+  assert.ok(hint.html().includes(browserHintCopy.title));
+  assert.match(hint.html(), /role="status"/);
+  assert.match(hint.html(), /aria-label="关闭"/);
   assert.match(hint.html(), /当前可能在 QQ 内打开/);
-  await hint.copy();
-  assert.deepEqual(hint.copied, ["https://pczafu.cn/member/repair-activities/a"]);
-  assert.ok(hint.html().includes(browserHintCopy.copied));
-  await hint.copy(true);
-  assert.ok(hint.html().includes(browserHintCopy.copyFailed));
-  assert.match(hint.html(), /<textarea[^>]*readonly/i);
+  assert.equal((hint.html().match(/<button\b/g) ?? []).length, 1);
+  assert.doesNotMatch(hint.html(), /复制|textarea|<a\b|aria-modal|role="dialog"/);
   hint.close();
   assert.equal(hint.view(), null);
   assert.equal(hint.storage.get(browserHintDismissedKey), "1");
   assert.equal(hint.remount(), null);
 });
 
-test("存储受限不影响关闭；登录页复制已过滤的模式和业务回跳", async (t) => {
-  const hint = await mount(t, {
-    blockedStorage: true,
-    loginPath: "/login?mode=register&returnTo=%2Fmember%2Frepair-activities",
-  });
+test("存储受限不影响关闭或 Esc", async (t) => {
+  const hint = await mount(t, { blockedStorage: true });
   hint.hydrate();
-  await hint.copy();
-  assert.deepEqual(hint.copied, [
-    "https://pczafu.cn/login?mode=register&returnTo=%2Fmember%2Frepair-activities",
-  ]);
   hint.close();
+  assert.equal(hint.view(), null);
+  hint.remount();
+  hint.escape();
   assert.equal(hint.view(), null);
 });
 
-test("未知 UA 不提示；剪贴板不可用时仍提供手动复制", async (t) => {
+test("未知 UA 不提示；微信内置浏览器可通过 Esc 关闭", async (t) => {
   const hint = await mount(t);
   Object.assign(navigator, { userAgent: "unknown-client" });
   assert.equal(hint.hydrate(), null);
-  Object.assign(navigator, { userAgent: "MicroMessenger/8.0.40", clipboard: undefined });
+  Object.assign(navigator, {
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) MicroMessenger/8.0.40",
+  });
   hint.remount();
   assert.match(hint.html(), /当前可能在 微信 内打开/);
-  await hint.copy();
-  assert.ok(hint.html().includes(browserHintCopy.copyFailed));
+  hint.escape();
+  assert.equal(hint.remount(), null);
+});
+
+test("桌面 QQ / 微信不渲染提醒，随后切换手机 UA 仍能显示", async (t) => {
+  const hint = await mount(t);
+  for (const marker of ["QQ/9.9.16", "MicroMessenger/4.0.0"]) {
+    Object.assign(navigator, {
+      userAgent: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) ${marker}`,
+    });
+    assert.equal(hint.remount(), null);
+  }
+  assert.equal(hint.storage.get(browserHintDismissedKey), undefined);
+  Object.assign(navigator, { userAgent: "Mozilla/5.0 (Linux; Android 14) Mobile QQ/9.0.0" });
+  hint.remount();
+  assert.match(hint.html(), /当前可能在 QQ 内打开/);
 });
 
 test("共用登录面板在两种模式保留流程入口，提醒与表单、账号链接顺序正确", async () => {
@@ -178,14 +178,13 @@ test("共用登录面板在两种模式保留流程入口，提醒与表单、�
   for (const mode of ["login", "register"] as const) {
     const panel = LoginPanel({ mode, returnTo: "/member/repair-activities/a" });
     const children = React.Children.toArray(panel.props.children) as React.ReactElement<{
-      loginPath?: string;
+      returnTo?: string;
       children?: ReactNode;
     }>[];
     assert.equal(children[0].type, BrowserHint);
     assert.equal(children[1].type, mode === "login" ? LoginForm : InviteRegistrationForm);
-    const path = new URL(children[0].props.loginPath!, "https://pczafu.cn");
-    assert.equal(path.searchParams.get("returnTo"), "/member/repair-activities/a");
-    assert.equal(path.searchParams.get("mode"), mode === "register" ? "register" : null);
+    assert.deepEqual(children[0].props, {});
+    assert.equal(children[1].props.returnTo, "/member/repair-activities/a");
     const links = React.Children.toArray(children[2].props.children) as React.ReactElement<{
       className?: string;
     }>[];
