@@ -27,6 +27,12 @@ export function invalidateClientSession(recheck = false): void {
   emit({ type: "invalidate", recheck });
 }
 
+/** 前台恢复只作废新鲜度；确认身份变化后再隔离在途业务结果。 */
+export function refreshClientSession(): void {
+  snapshot = undefined;
+  emit({ type: "invalidate", recheck: true });
+}
+
 function syncStamp() {
   if (typeof window === "undefined") return;
   try {

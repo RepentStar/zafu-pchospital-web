@@ -9,6 +9,7 @@ import { isAccountStepPage } from "@/lib/auth/account-steps";
 import {
   checkClientSession,
   invalidateClientSession,
+  refreshClientSession,
   watchClientSession,
 } from "@/lib/auth/client-session";
 
@@ -166,10 +167,10 @@ export function SessionMonitor() {
     }
 
     function onVisible() {
-      if (document.visibilityState === "visible") invalidateClientSession(true);
+      if (document.visibilityState === "visible") refreshClientSession();
     }
     function onPageShow(event: PageTransitionEvent) {
-      if (event.persisted) invalidateClientSession(true);
+      if (event.persisted) refreshClientSession();
     }
     const unwatch = watchClientSession((event) => {
       if (cancelled) return;

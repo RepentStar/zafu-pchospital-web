@@ -4,7 +4,12 @@ import { setImmediate } from "node:timers/promises";
 import test, { type TestContext } from "node:test";
 
 import type { AccountAccessView } from "../../src/types/contracts";
-import { invalidateClientSession, sessionMutationFetch } from "../../src/lib/auth/client-session";
+import {
+  clientSessionRevision,
+  invalidateClientSession,
+  sessionMutationFetch,
+} from "../../src/lib/auth/client-session";
+import { adminFetch, clearAdminCache } from "../../src/features/admin/admin-client";
 
 /**
  * 真实 `SessionMonitor` 的排期与「允许停留」断言。
@@ -334,6 +339,44 @@ test("focus / visibilitychange 触发复查，卸载后定时器与监听都不�
   ui.tick(DAY);
   await ui.settle();
   assert.equal(ui.calls.length, 3, "卸载后不再产生请求（定时器与监听已撤）");
+});
+
+test("前台恢复确认同一会话时，保留在途重置操作返回的临时密码", async (t) => {
+  const initial = mePayload(
+    { state: "READY", destination: "/admin", exemptionExpiresAt: null },
+    iso(2 * HOUR),
+  );
+  const ui = await monitor(t, { pathname: "/admin", replies: [{ payload: initial }] });
+  t.after(clearAdminCache);
+  let finish!: (value: Response) => void;
+  let checks = 0;
+  t.mock.method(globalThis, "fetch", (url: unknown) => {
+    if (String(url).startsWith("/api/v1/me")) {
+      checks++;
+      return Promise.resolve(Response.json(initial));
+    }
+    return new Promise<Response>((resolve) => {
+      finish = resolve;
+    });
+  });
+  const revision = clientSessionRevision();
+  const reset = adminFetch<{ temporaryPassword: string }>("/api/v1/admin/accounts/reset", {
+    method: "POST",
+  });
+  await ui.settle();
+  ui.handlers.focus();
+  await ui.settle();
+  ui.handlers["document:visibilitychange"]();
+  await ui.settle();
+  (ui.handlers.pageshow as (event: { persisted: boolean }) => void)({ persisted: true });
+  await ui.settle();
+  assert.equal(checks, 3);
+  assert.equal(clientSessionRevision(), revision);
+  finish(Response.json({ success: true, data: { temporaryPassword: "012345" } }));
+  const result = await reset;
+  assert.ok(result.ok);
+  assert.equal(result.data.temporaryPassword, "012345");
+  assert.deepEqual(ui.redirects, []);
 });
 
 test("另一标签页切换账号后，原后台页整页重判，清除旧组件状态", async (t) => {
